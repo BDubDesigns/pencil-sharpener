@@ -29,8 +29,10 @@ Brandon's call: nail the manual before anything else. Electric is shelved for no
 - A fresh full pencil takes the spent one's place automatically, so the loop never stalls.
 - Verified headless (390x844 portrait + 1280x800 desktop): zero console errors, hover highlights the crank, 3 crank circles take sharpness to 65% and length to 0.74 with the crank spinning exactly 3 revolutions, grinding a pencil to a stump banks a stub and spawns a fresh pencil, stubs persist across reload.
 
-## Slice 2a (stashed, not shipped)
-- Curls that land in the tray stay there and ride with the tray instead of fading, and get flung into the chest on dump. Implemented and half-verified (persistence confirmed, dump fling not yet verified) then stashed when the pivot landed: `git stash` "slice 2a WIP". Revisit after the manual feel is settled.
+## Slice 2a — curls pile in the tray (shipped after the pivot)
+- Curls that land in the tray stay there and ride with the tray instead of fading, and get flung into the chest on dump. First implemented before the pivot, stashed, then re-applied on top of the pivot with the pour target updated to the chest's new position.
+- Verified headless: 33 curls piled after 3 crank circles, 36 still there 3 seconds later (no fade), 0 mid-dump (flung), wallet banked 58, pile rebuilt to 19 after the next cranks, zero console errors.
+- Crank haptics in the same slice: a light buzz per crank step (throttled to one per 45ms) and a stronger buzz on the perfect point.
 
 You are at a desk with a chunky old-school sharpener, a box of pencils,
 and a wooden chest. Sharpen pencils. Peel off curls. Dump the shavings.
@@ -134,15 +136,11 @@ where you left it, stubs included.
 
 - The crank is the main interaction. It is big and front-facing now,
   but the feel is unverified. The phone playtest is the verdict.
-- Curl particles rest on the desk and fade. They do not pile up in
-  the tray as a visible heap yet (the pile mesh grows, the loose
-  curls do not). Slice 2a implemented this and is stashed, pending
-  the manual feel settling.
-- No haptics on the crank itself yet (tray drag has them). A tiny
-  vibration on each crank step would help a lot on phones.
 - The stub dish sits at the left edge of the portrait frame and the
   chest is partly cut off on the right. The hero shot is the crank,
   but the framing could still be tightened.
+- Pile curls cluster at the left end of the tray (they fall from the
+  hole). Physically plausible, but the heap could spread more evenly.
 - Feel is unverified. The phone playtest is the verdict, never this
   document.
 
@@ -150,11 +148,8 @@ where you left it, stubs included.
 
 1. Crank tuning from playtest: step size, resistance sound, curl
    rate, pencil lifetime (currently ~10 rotations per pencil).
-2. Crank haptics: vibrate per step, stronger on the perfect point.
-3. Curls that land in the tray and stay until dumped (slice 2a,
-   stashed, revive and verify).
-4. Stub spending: the first thing stubs buy.
-5. Scene polish: desk dressing, pencil box, warmer light.
+2. Stub spending: the first thing stubs buy.
+3. Scene polish: desk dressing, pencil box, warmer light.
 
 ## Monetization (undecided, not built)
 

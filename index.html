@@ -457,11 +457,12 @@ for (let i = 0; i < CURL_MAX; i++) {
   const m = new THREE.Mesh(curlGeo, curlMats[i % 3]);
   m.visible = false; m.castShadow = true;
   scene.add(m);
-  curls.push({ mesh: m, vel: new THREE.Vector3(), spin: new THREE.Vector3(), life: 0, active: false, rest: false });
+  curls.push({ mesh: m, vel: new THREE.Vector3(), spin: new THREE.Vector3(), life: 0, active: false, rest: false, inPile: false });
 }
 let curlIdx = 0;
 function spawnCurl(pos, burst) {
   const c = curls[curlIdx]; curlIdx = (curlIdx + 1) % CURL_MAX;
+  if (c.inPile) { scene.attach(c.mesh); c.inPile = false; }
   c.active = true; c.rest = false; c.life = 1.4;
   c.mesh.visible = true;
   c.mesh.position.copy(pos);
@@ -477,6 +478,10 @@ function pencilTipWorld() {
   v.x += 0.1; v.z += 0.1;
   return v;
 }
+function trayFootprintContains(p) {
+  const cx = trayShiftX, cz = TRAY_BASE_Z + traySlide * 1.15;
+  return Math.abs(p.x - cx) < 0.8 && Math.abs(p.z - cz) < 0.55;
+}
 function updateCurls(dt) {
   for (const c of curls) {
     if (!c.active) continue;
@@ -488,11 +493,20 @@ function updateCurls(dt) {
       if (c.mesh.position.y <= floorY) {
         c.mesh.position.y = floorY;
         if (Math.abs(c.vel.y) > 0.4) { c.vel.y *= -0.25; c.vel.x *= 0.6; c.vel.z *= 0.6; }
-        else { c.rest = true; c.mesh.rotation.x = Math.random() * 0.6 - 0.3; c.mesh.rotation.z = Math.random() * 0.6 - 0.3; }
+        else {
+          c.rest = true;
+          c.mesh.rotation.x = Math.random() * 0.6 - 0.3; c.mesh.rotation.z = Math.random() * 0.6 - 0.3;
+          if (trayFootprintContains(c.mesh.position)) {
+            // Landed in the tray: it stays there and rides with the tray
+            c.inPile = true;
+            c.life = Infinity;
+            trayGroup.attach(c.mesh);
+          }
+        }
       }
     }
     c.life -= dt;
-    if (c.life <= 0) { c.active = false; c.mesh.visible = false; }
+    if (c.life <= 0) { c.active = false; c.inPile = false; c.mesh.visible = false; }
     else if (c.life < 0.4) { c.mesh.scale.multiplyScalar(0.92); }
   }
 }
@@ -539,6 +553,7 @@ function sharpen(amount) {
     const bonus = Math.round(25 * gearMult());
     S.tray = Math.min(trayCapacity(), S.tray + bonus);
     AudioFX.pencilDone();
+    buzz([20, 30, 30]);
     toast('Perfect point! +' + bonus + ' shavings');
   }
   if (S.pencilLength <= 0.08) spendPencil();
@@ -559,8 +574,16 @@ function spendPencil() {
 function crankStep() {
   sharpen(0.9);
   AudioFX.crankClick();
+  buzzStep();
   if (Math.random() < 0.75) spawnCurl(pencilTipWorld(), false);
   if (Math.random() < 0.3) AudioFX.curl();
+}
+let lastBuzzAt = 0;
+function buzzStep() {
+  const now = performance.now();
+  if (now - lastBuzzAt < 45) return;
+  lastBuzzAt = now;
+  buzz(8);
 }
 
 // ---------- Dump flow ----------
@@ -577,7 +600,7 @@ function pourCurl() {
   );
   spawnCurl(p, true);
   const c = curls[(curlIdx - 1 + CURL_MAX) % CURL_MAX];
-  c.vel.set((2.2 - p.x) * 0.9, 1.6 + Math.random(), (0.1 - p.z) * 0.9);
+  c.vel.set((1.45 - p.x) * 0.9, 1.6 + Math.random(), (0.9 - p.z) * 0.9);
 }
 function startDumpPour() {
   dumpState = 'dumping'; dumpTimer = 0.9; pourAcc = 0;
@@ -586,6 +609,16 @@ function startDumpPour() {
   trayTiltTarget = -0.55; trayShiftXTarget = 0.55;
   lidPivot.rotation.x = -1.1;
   setTimeout(() => { lidPivot.rotation.x = -0.55; }, 900);
+  // Everything piled in the tray gets flung toward the chest with it
+  for (const c of curls) {
+    if (c.active && c.inPile) {
+      scene.attach(c.mesh);
+      c.inPile = false; c.rest = false; c.life = 1.2;
+      const p = c.mesh.position;
+      c.vel.set((1.45 - p.x) * 0.9, 1.8 + Math.random(), (0.9 - p.z) * 0.9);
+      c.spin.set(Math.random() * 6 - 3, Math.random() * 6 - 3, Math.random() * 6 - 3);
+    }
+  }
 }
 function dumpClick() {
   AudioFX.click();
@@ -894,7 +927,10 @@ function resetGame() {
   nextSurgeAt = performance.now() / 1000 + 100 + Math.random() * 60;
   lidPivot.rotation.x = -0.55;
   pile.visible = false;
-  for (const c of curls) { c.active = false; c.rest = false; c.mesh.visible = false; }
+  for (const c of curls) {
+    if (c.inPile) { scene.attach(c.mesh); c.inPile = false; }
+    c.active = false; c.rest = false; c.mesh.visible = false;
+  }
   $('dumpBtn').textContent = 'Slide tray out';
   $('shop').classList.remove('open');
   setModeVisuals();
@@ -1031,6 +1067,7 @@ window.SHARP = {
     return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
   },
   tray: () => ({ slide: traySlide, state: dumpState, tilt: trayTilt }),
+  pileCount: () => curls.filter((c) => c.active && c.inPile).length,
   crank: () => ({ spin: crankSpin, hover: crankHover }),
   stubCount: () => S.stubs
 };
