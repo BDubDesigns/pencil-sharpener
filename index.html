@@ -308,8 +308,8 @@ hole.rotation.z = Math.PI / 2; hole.position.set(-0.86, 0.62, 0); sharpener.add(
 // Crank on the front face, facing the camera. It spins around the
 // group's local z-axis, so a circular drag on screen turns it 1:1.
 const crankGroup = new THREE.Group();
-crankGroup.position.set(0.42, 0.78, 0.68);
-crankGroup.scale.setScalar(1.55);
+crankGroup.position.set(0.22, 0.78, 0.68);
+crankGroup.scale.setScalar(1.15);
 sharpener.add(crankGroup);
 const crankDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 20), mat(0xd7dade, 0.25, 0.9));
 crankDisc.rotation.x = Math.PI / 2; crankDisc.castShadow = true; crankGroup.add(crankDisc);
@@ -334,7 +334,7 @@ electricUnit.add(led);
 
 // ---------- Tray ----------
 const trayGroup = new THREE.Group();
-trayGroup.position.set(0, 0.1, 0.35);
+trayGroup.position.set(0, 0.1, 0.15);
 scene.add(trayGroup);
 const trayBase = box(1.5, 0.12, 1.0, mat(0x6b4a2f, 0.7), 0, 0.06, 0);
 trayGroup.add(trayBase);
@@ -344,33 +344,36 @@ trayGroup.add(box(0.06, 0.1, 1.0, mat(0x7d583a, 0.7), -0.75, 0.14, 0));
 trayGroup.add(box(0.06, 0.1, 1.0, mat(0x7d583a, 0.7), 0.75, 0.14, 0));
 const trayHandle = box(0.5, 0.08, 0.08, mat(0x4a2f10, 0.6), 0, 0.1, 0.56);
 trayGroup.add(trayHandle);
-// Generous invisible hit box so the tray is easy to grab on a phone
+// Hit box matched to the visible tray, so it cannot swallow pointerdowns
+// meant for the crank sweeping above it.
 const trayHitBox = new THREE.Mesh(
-  new THREE.BoxGeometry(2.0, 0.6, 1.5),
+  new THREE.BoxGeometry(1.6, 0.42, 1.1),
   new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
 );
-trayHitBox.position.set(0, 0.15, 0);
+trayHitBox.position.set(0, 0.12, 0);
 trayGroup.add(trayHitBox);
 const pileMat = mat(0xd9b380, 0.95);
 const pile = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), pileMat);
 pile.scale.set(1, 0.1, 0.65); pile.position.set(0, 0.14, 0); pile.visible = false;
 trayGroup.add(pile);
-const TRAY_BASE_Z = 0.35;
+const TRAY_BASE_Z = 0.15;
 
 // ---------- Chest ----------
-const CHEST_POS = { x: 1.45, z: 0.05 };
+// Chest sits to the right and set back from the sharpener, so the crank
+// sweep clears it with room to spare instead of crossing its face.
+const CHEST_POS = { x: 2.05, z: -0.6 };
 const chest = new THREE.Group();
 chest.position.set(CHEST_POS.x, 0, CHEST_POS.z);
 scene.add(chest);
-chest.add(box(1.35, 0.7, 0.95, mat(0x7a5230, 0.8), 0, 0.35, 0));
+chest.add(box(1.2, 0.7, 0.9, mat(0x7a5230, 0.8), 0, 0.35, 0));
 const lidPivot = new THREE.Group();
-lidPivot.position.set(0, 0.7, -0.475);
+lidPivot.position.set(0, 0.7, -0.45);
 chest.add(lidPivot);
-const lid = box(1.35, 0.18, 0.95, mat(0x8a5f36, 0.8), 0, 0.09, 0.475);
+const lid = box(1.2, 0.18, 0.9, mat(0x8a5f36, 0.8), 0, 0.09, 0.45);
 lidPivot.add(lid);
 lidPivot.rotation.x = -0.55;
-chest.add(box(1.37, 0.1, 0.1, mat(0xc9a227, 0.35, 0.8), 0, 0.35, 0.48));
-chest.add(box(1.37, 0.1, 0.1, mat(0xc9a227, 0.35, 0.8), 0, 0.35, -0.48));
+chest.add(box(1.22, 0.1, 0.1, mat(0xc9a227, 0.35, 0.8), 0, 0.35, 0.45));
+chest.add(box(1.22, 0.1, 0.1, mat(0xc9a227, 0.35, 0.8), 0, 0.35, -0.45));
 
 // ---------- Stub tray: a little round dish where spent stubs pile up ----------
 const STUB_TRAY_POS = { x: -0.95, z: 0.95 };
@@ -391,6 +394,36 @@ sharpener.add(pencilGroup);
 const pencilBodyMat = new THREE.MeshStandardMaterial({ color: PENCIL_COLORS[S.pencilType], roughness: 0.55 });
 const pencilBody = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 1.5, 6), pencilBodyMat);
 pencilBody.position.y = 1.07; pencilBody.castShadow = true;
+// ---------- Pencil label: "TICONDEROOGEEA NO 2" printed down the body ----------
+// A curved canvas-texture decal hugging the camera-facing faces of the hex
+// body, so the text rides with the pencil and compresses visibly as it
+// grinds shorter. The pencil is a 6-sided cylinder: the front ridge is at
+// theta 0, so the decal spans the two front faces (-60..+60 deg).
+function makePencilLabelTexture() {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 1024;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.fillStyle = '#0e5e28';
+  ctx.font = 'bold 76px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.save();
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate(Math.PI / 2);
+  ctx.fillText('TICONDEROOGEEA NO 2', 0, 0);
+  ctx.restore();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+const pencilLabel = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.089, 0.089, 1.25, 6, 1, true, -Math.PI / 3, Math.PI * 2 / 3),
+  new THREE.MeshBasicMaterial({ map: makePencilLabelTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })
+);
+pencilLabel.renderOrder = 1;
+pencilBody.add(pencilLabel);
 const woodMat = mat(0xe8c99a, 0.85);
 const woodCone = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.34, 12), woodMat);
 woodCone.rotation.x = Math.PI; woodCone.position.y = 0.17; woodCone.castShadow = true;
@@ -747,6 +780,11 @@ function pointerAngle(e) {
   const p = crankScreenPos();
   return Math.atan2(e.clientY - p.y, e.clientX - p.x);
 }
+function crankHit(e) {
+  const ndc = new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  return raycaster.intersectObjects(crankMeshes, false).length > 0;
+}
 function trayHit(e) {
   const ndc = new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
@@ -754,6 +792,9 @@ function trayHit(e) {
 }
 function tryStartTrayDrag(e) {
   if (dumpState === 'dumping') return false;
+  // The crank always wins: if the pointer is over the crank, this is a
+  // crank grab, never a tray drag, even where the tray hit box overlaps it.
+  if (S.mode === 'manual' && crankHit(e)) return false;
   if (!trayHit(e)) return false;
   trayDrag = {
     mode: dumpState === 'out' ? 'dump' : 'pull',
@@ -991,11 +1032,12 @@ function resize() {
   renderer.setSize(w, h, true);
   camera.aspect = w / h;
   if (camera.aspect < 0.75) {
-    // Portrait: straight-on hero shot, but pulled back enough that the
-    // stub dish (left) and chest (right) both sit inside the frame.
-    camera.fov = 62;
-    camera.position.set(0.3, 1.7, 7.6);
-    camera.lookAt(0.22, 0.9, 0);
+    // Portrait: straight-on hero shot, pulled back enough that the crank
+    // sweep, the stub dish (left) and the chest (right) all sit inside
+    // the frame with clear space between them.
+    camera.fov = 60;
+    camera.position.set(0.3, 1.7, 8.6);
+    camera.lookAt(0.30, 0.9, 0);
   } else {
     camera.fov = 40;
     camera.position.set(0.4, 2.3, 7.6);

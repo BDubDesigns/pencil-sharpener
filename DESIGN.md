@@ -5,6 +5,49 @@ sharpening a pencil. Built in a single `index.html` (Three.js vendored
 locally in `vendor/`, no runtime CDN dependency), mobile-first, touch
 friendly. Synthesized WebAudio sounds only, no audio assets.
 
+## Slice: pencil label + layout fix (Nov 25, after Brandon's first playtest)
+Brandon's verdict: "Not great lol but you tried. It's better at least."
+Two fixes, exactly as briefed, no redesign around them:
+- Pencil label: the pencil is a solid color and hangs off screen left, so
+  it does not appear to move as it grinds down. Fix: "TICONDEROOGEEA NO 2"
+  in monospace bold green (#0e5e28) down the center of the pencil body.
+  (Brandon's exact joke spelling — Ticonderoogeea, uppercased — not the
+  real brand spelling.) It is a canvas-texture decal on a curved cylinder
+  segment hugging the two camera-facing faces of the hex body, parented to
+  the pencil body so it rides along and compresses as the pencil shortens.
+  At full length only the tail ("OGEEA NO 2") is in frame; as the pencil
+  grinds, the text compresses toward the tip and more of it slides into
+  view, so the shortening reads. Verified in screenshots at length 1.0
+  and 0.597.
+- Layout / crank grab: the chest and the tray overlapped the crank sweep,
+  which made the crank hard to grab and looked piled-up. Root causes found
+  by projecting the scene to screen coords: (1) the tray's invisible hit
+  box (2.0 x 1.5) was bigger than the tray and tryStartTrayDrag ran before
+  the crank check, so pointerdowns over the crank's lower sweep started a
+  tray drag; (2) the crank sweep (radius 0.9 at 1.55x scale) was bigger
+  than the body face, so the handle dipped below the desk and crossed the
+  chest's face. Fixes: crank wins over the tray hit box in pointerdown
+  (crankHit raycast first); tray hit box shrunk to the visible tray
+  (1.6 x 1.1); crank scale 1.55 -> 1.15 and moved left on the face
+  (local x 0.42 -> 0.22), so its sweep bottom stays above the desk
+  (world y 0.11) and its diameter is 119px on a 390px screen, still a
+  big grab target; chest moved right and back to (2.05, -0.6) and narrowed
+  to 1.2 wide; tray tucked back under the body (z 0.35 -> 0.15), so the
+  handle passes in front of it with a 0.21 depth gap, as on a real
+  sharpener; portrait camera pulled back to z 8.6, fov 60, lookAt x 0.30.
+  Measured on screen: crank sweep x 150-269, chest x 281-390, 12px clear
+  gap, zero sweep samples inside the chest rect; stub dish x 25-129, in
+  frame. The handle still crosses the tray's screen region at the bottom
+  of the swing, but in front of it, with depth separation — that is how
+  a real crank passes a tray.
+- Verified headless (390x844 portrait, DPR 2.25 + 1280x800 desktop):
+  zero console errors; crank 2 circles = exactly 2 revolutions
+  (spin -12.57), sharpness 0 -> 43, tray 0 -> 39; grabbing the handle
+  raises sharpness 43 -> 70 with traySlide staying 0 and dump closed;
+  grinding to length 0.597; tray drag still works (slide 0.85, state out);
+  dump banks 60 (tray 60 -> 0, wallet 0 -> 60). Desktop shows the full
+  pencil with the whole "TICONDEROOGEEA NO 2" legible.
+
 ## Polish slice — portrait framing + curl heap spread (Nov 25)
 - Framing: the stub dish sat at the left edge and the chest was cut off on the right in portrait. Root cause is depth: both props sit in the foreground, closer to the camera than the sharpener, so they need far more angular width than their world span suggests. Fix: portrait camera pulled back to z 7.6 with fov 62 and lookAt x 0.22; dish moved to (-0.95, z 0.95) and chest to (1.45, z 0.05), beside the sharpener instead of in front of it. First attempt put the chest at z 0.7, which occluded the crank disc and the tray's right end; moving it back fixed that. Crank enlarged to 1.55x to hold its hero size at the longer distance (79px center-to-arm-tip on a 390px screen). Verified by projecting the dish edges, chest edges, crank, hole and tray to screen coords: dish left edge at x 16, chest right at x 370, everything in frame with 16-20px margins.
 - Curl heap: curls spawn at the pencil hole and fell straight down, so the heap clumped at the left end of the tray. Fix: landed curls now scoot to a deterministic jittered-grid slot across the whole tray footprint (8x5 grid, stacking layers), lerping to it over a fraction of a second, and the spawn spread widened with a slight rightward bias so the falling arc covers more of the tray. The heap now reads as a real pile. Pour targets now use a CHEST_POS constant so the dump follows the chest.
@@ -142,11 +185,21 @@ where you left it, stubs included.
 
 - The crank is the main interaction. It is big and front-facing now,
   but the feel is unverified. The phone playtest is the verdict.
-- The stub dish sits at the left edge of the portrait frame and the
-  chest is partly cut off on the right. The hero shot is the crank,
-  but the framing could still be tightened.
-- Pile curls cluster at the left end of the tray (they fall from the
-  hole). Physically plausible, but the heap could spread more evenly.
+- The chest's right edge sits exactly at the portrait frame edge (x 390)
+  — it reads fully in the render, but with zero margin. If it ever reads
+  as cut off, nudge the chest left or pull the camera back a touch.
+- The handle still crosses the tray's screen region at the bottom of its
+  swing, in front of the tray with a 0.21 depth gap. That is how a real
+  crank passes a tray, but if it reads as a collision on his phone, the
+  crank needs to shrink further or the tray needs to sit lower.
+- The "Tray is full!" toast sits at 38% height and can overlap the crank
+  handle while it is up. Transient, but if it annoys him it should move.
+- The paper stack is only a sliver at the portrait left edge and the pink
+  eraser prop is a sliver at the right edge — edge dressing that only
+  fully shows on desktop.
+- The scene still has a large empty beige band above the desk in
+  portrait. It reads as a wall, but if he wants the desk to fill more of
+  the frame, that is a framing taste call.
 - Feel is unverified. The phone playtest is the verdict, never this
   document.
 
