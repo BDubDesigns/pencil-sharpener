@@ -5,6 +5,40 @@ sharpening a pencil. Built in a single `index.html` (Three.js vendored
 locally in `vendor/`, no runtime CDN dependency), mobile-first, touch
 friendly. Synthesized WebAudio sounds only, no audio assets.
 
+## Slice: five layout nits (Nov 25)
+All five verified nits from the last verification round, fixed in one slice:
+- Chest at frame edge: chest right edge sat exactly at x 390, zero margin.
+  Camera pulled back (portrait z 8.6 -> 9.0), chest narrowed 1.2 -> 1.05
+  wide and moved to (1.95, -0.7). Measured: right edge x 366 (24px
+  margin), left edge 283, 38px clear of the crank handle's right reach.
+  Pour targets follow CHEST_POS, so the dump still banks (verified:
+  tray 50 -> 0, wallet 0 -> 50).
+- Handle vs tray: the handle crossed 18px into the tray at the bottom of
+  its swing. Crank raised (y 0.78 -> 0.90) and the arm shortened
+  (0.52 -> 0.38, handle at 0.36), so the orbit shrank without touching
+  the handle or disc size — the grab target is unchanged. Measured:
+  handle bottom edge y 473 vs tray top edge y 480, 7px clear; confirmed
+  in a bottom-of-swing screenshot (crank spin pi).
+- Toast overlap: "Tray is full!" sat at top 38%, overlapping the crank
+  handle at the top of its swing. Moved to top 196px: 48px below the
+  meters panel (bottom 158), 33px below the surge pill, ~140px above the
+  crank sweep. Position verified by measurement (206-250px).
+- Edge props: paper stack (x -2.9) and pink eraser (x 2.2) were slivers
+  at the portrait edges. Paper shrunk to 1.1 x 1.4 and moved to
+  (-1.6, -1.1); eraser moved to (1.7, 1.2). Measured: paper left corner
+  x 12, eraser spans 299-349, both fully in frame.
+- Empty beige band: the wall above the desk was blank. Added a real wall
+  (16 x 9 plane at z -4.6, just behind the desk's back edge) with a
+  baseboard, a window with a sun on the left, and a framed "STAY SHARP"
+  poster (canvas texture, pencil graphic, NO. 2) on the right. Verified
+  in portrait and desktop screenshots: window and poster fully in frame
+  on both, wall spans the desktop frame.
+- Also added a `window.SHARP.project(x, y, z)` debug helper so layout
+  can be measured in screen pixels instead of guessed.
+- Verified headless (390x844 portrait, DPR 2.25 + 1280x800 desktop):
+  zero console errors; crank 2 circles = sharpness 0 -> 43, tray 0 -> 39;
+  dump banks 50; label, wall, props all render on both viewports.
+
 ## Slice: pencil label + layout fix (Nov 25, after Brandon's first playtest)
 Brandon's verdict: "Not great lol but you tried. It's better at least."
 Two fixes, exactly as briefed, no redesign around them:
@@ -185,21 +219,15 @@ where you left it, stubs included.
 
 - The crank is the main interaction. It is big and front-facing now,
   but the feel is unverified. The phone playtest is the verdict.
-- The chest's right edge sits exactly at the portrait frame edge (x 390)
-  — it reads fully in the render, but with zero margin. If it ever reads
-  as cut off, nudge the chest left or pull the camera back a touch.
-- The handle still crosses the tray's screen region at the bottom of its
-  swing, in front of the tray with a 0.21 depth gap. That is how a real
-  crank passes a tray, but if it reads as a collision on his phone, the
-  crank needs to shrink further or the tray needs to sit lower.
-- The "Tray is full!" toast sits at 38% height and can overlap the crank
-  handle while it is up. Transient, but if it annoys him it should move.
-- The paper stack is only a sliver at the portrait left edge and the pink
-  eraser prop is a sliver at the right edge — edge dressing that only
-  fully shows on desktop.
-- The scene still has a large empty beige band above the desk in
-  portrait. It reads as a wall, but if he wants the desk to fill more of
-  the frame, that is a framing taste call.
+- The five layout nits from the Nov 25 verification round (chest at
+  frame edge, handle crossing the tray, toast overlapping the crank,
+  paper/eraser slivers, empty beige band) are all fixed in the "five
+  layout nits" slice above — measured and screenshot-verified. If any
+  of them still reads wrong on his phone, that is a new playtest note,
+  not this list.
+- The title text ("Pencil Sharpener - a satisfying little game") sits
+  over the desk's dark front face in portrait and reads low-contrast
+  there. Cosmetic; move it or brighten it if he flags it.
 - Feel is unverified. The phone playtest is the verdict, never this
   document.
 

@@ -34,7 +34,7 @@
   #feedLabel { color: #666; font-weight: 600; }
   #surge { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 116px); left: 50%; transform: translateX(-50%); padding: 8px 16px; background: #fff3b0; border: 2px solid #e8b64c; color: #7a5200; font-weight: 800; font-size: 15px; border-radius: 999px; display: none; box-shadow: 0 0 24px rgba(232, 182, 76, 0.9); animation: pulse 0.7s infinite alternate; white-space: nowrap; }
   @keyframes pulse { from { box-shadow: 0 0 12px rgba(232,182,76,0.6); } to { box-shadow: 0 0 30px rgba(232,182,76,1); } }
-  #toast { position: absolute; top: 38%; left: 50%; transform: translateX(-50%); padding: 10px 18px; font-size: 17px; font-weight: 800; color: #4a2f10; opacity: 0; transition: opacity 0.25s; text-align: center; pointer-events: none; white-space: nowrap; }
+  #toast { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 196px); left: 50%; transform: translateX(-50%); padding: 10px 18px; font-size: 17px; font-weight: 800; color: #4a2f10; opacity: 0; transition: opacity 0.25s; text-align: center; pointer-events: none; white-space: nowrap; }
   #hint { position: absolute; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 86px); left: 50%; transform: translateX(-50%); max-width: 92vw; text-align: center; line-height: 1.3; font-size: 14px; font-weight: 600; color: #6b5233; background: rgba(255,252,245,0.85); padding: 7px 14px; border-radius: 999px; pointer-events: none; }
   #controls { position: absolute; bottom: max(12px, env(safe-area-inset-bottom)); left: 10px; right: 10px; display: flex; gap: 8px; }
   .ctl-btn { pointer-events: auto; flex: 1; padding: 14px 6px; font-size: 15px; font-weight: 800; color: #fff; background: #4a6b3a; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 3px 0 #33502a; }
@@ -280,12 +280,62 @@ function box(w, h, d, material, x, y, z, shadow) {
 // Desk
 const desk = box(14, 0.3, 9, mat(0x9a6b40, 0.9), 0, -0.15, 0);
 scene.add(desk);
+// ---------- Wall ----------
+// A real wall behind the desk so the upper frame is not a blank beige
+// void. Sits just behind the desk's back edge (z -4.5), wide enough to
+// cover the frame on desktop too.
+const wall = new THREE.Mesh(new THREE.PlaneGeometry(16, 9), mat(0xe9d6b0, 0.95));
+wall.position.set(0.3, 4.0, -4.6); wall.receiveShadow = true;
+scene.add(wall);
+const baseboard = box(16, 0.18, 0.08, mat(0xd9c49a, 0.9), 0.3, 0.09, -4.55);
+scene.add(baseboard);
+// Window, left side of the wall: frame, sky, cross bars, sill, sun.
+const win = new THREE.Group();
+win.position.set(-2.0, 2.8, -4.55);
+scene.add(win);
+win.add(box(2.1, 2.5, 0.08, mat(0x8a6d3b, 0.85), 0, 0, 0));
+const sky = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 2.3), new THREE.MeshStandardMaterial({ color: 0xafd4e8, roughness: 0.9, emissive: 0x2a4a5a, emissiveIntensity: 0.25 }));
+sky.position.z = 0.05; win.add(sky);
+const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(0.2, 20), new THREE.MeshStandardMaterial({ color: 0xffd34d, roughness: 0.6, emissive: 0xffc21a, emissiveIntensity: 0.7 }));
+sunDisc.position.set(-0.45, 0.65, 0.06); win.add(sunDisc);
+win.add(box(0.08, 2.3, 0.03, mat(0x8a6d3b, 0.85), 0, 0, 0.06));
+win.add(box(1.9, 0.08, 0.03, mat(0x8a6d3b, 0.85), 0, 0, 0.06));
+win.add(box(2.3, 0.1, 0.16, mat(0x8a6d3b, 0.85), 0, -1.3, 0.04));
+// Poster, right side of the wall: framed "STAY SHARP" print.
+function makePosterTexture() {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 320;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fffaf0'; ctx.fillRect(0, 0, 256, 320);
+  ctx.strokeStyle = '#2f5d3a'; ctx.lineWidth = 10; ctx.strokeRect(10, 10, 236, 300);
+  ctx.fillStyle = '#2f5d3a'; ctx.textAlign = 'center';
+  ctx.font = 'bold 44px monospace';
+  ctx.fillText('STAY', 128, 92);
+  ctx.fillText('SHARP', 128, 142);
+  // Little pencil under the words
+  ctx.fillStyle = '#e8b64c'; ctx.fillRect(78, 190, 100, 26);
+  ctx.fillStyle = '#d9b380'; ctx.beginPath(); ctx.moveTo(178, 190); ctx.lineTo(210, 203); ctx.lineTo(178, 216); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#2b2b2b'; ctx.beginPath(); ctx.moveTo(200, 197); ctx.lineTo(210, 203); ctx.lineTo(200, 209); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#e87aa1'; ctx.fillRect(66, 190, 12, 26);
+  ctx.fillStyle = '#2f5d3a'; ctx.font = 'bold 20px monospace';
+  ctx.fillText('NO. 2', 128, 268);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const poster = new THREE.Group();
+poster.position.set(2.2, 3.0, -4.55);
+scene.add(poster);
+poster.add(box(1.6, 2.0, 0.06, mat(0x4a2f10, 0.85), 0, 0, 0));
+const posterFace = new THREE.Mesh(new THREE.PlaneGeometry(1.44, 1.84), new THREE.MeshStandardMaterial({ map: makePosterTexture(), roughness: 0.9 }));
+posterFace.position.z = 0.04; poster.add(posterFace);
+
 // Paper stack and eraser props
-const paper = box(1.6, 0.06, 2.1, mat(0xfdfdf8, 0.95), -2.9, 0.03, -1.2);
-paper.rotation.y = 0.25; scene.add(paper);
-const paper2 = box(1.5, 0.05, 2.0, mat(0xf4f1e6, 0.95), -2.88, 0.09, -1.18);
-paper2.rotation.y = 0.32; scene.add(paper2);
-const eraser = box(0.5, 0.14, 0.2, mat(0xe87aa1, 0.8), 2.2, 0.07, 1.3);
+const paper = box(1.1, 0.06, 1.4, mat(0xfdfdf8, 0.95), -1.6, 0.03, -1.1);
+paper.rotation.y = 0.15; scene.add(paper);
+const paper2 = box(1.05, 0.05, 1.35, mat(0xf4f1e6, 0.95), -1.58, 0.09, -1.08);
+paper2.rotation.y = 0.2; scene.add(paper2);
+const eraser = box(0.5, 0.14, 0.2, mat(0xe87aa1, 0.8), 1.7, 0.07, 1.2);
 eraser.rotation.y = -0.4; scene.add(eraser);
 
 // ---------- Sharpener ----------
@@ -308,17 +358,17 @@ hole.rotation.z = Math.PI / 2; hole.position.set(-0.86, 0.62, 0); sharpener.add(
 // Crank on the front face, facing the camera. It spins around the
 // group's local z-axis, so a circular drag on screen turns it 1:1.
 const crankGroup = new THREE.Group();
-crankGroup.position.set(0.22, 0.78, 0.68);
+crankGroup.position.set(0.22, 0.90, 0.68);
 crankGroup.scale.setScalar(1.15);
 sharpener.add(crankGroup);
 const crankDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 20), mat(0xd7dade, 0.25, 0.9));
 crankDisc.rotation.x = Math.PI / 2; crankDisc.castShadow = true; crankGroup.add(crankDisc);
 const crankArmMat = new THREE.MeshStandardMaterial({ color: 0x4a4d52, roughness: 0.4, metalness: 0.7, emissive: 0x000000, emissiveIntensity: 0.6 });
-const crankArm = box(0.07, 0.52, 0.07, crankArmMat, 0, 0.26, 0.08);
+const crankArm = box(0.07, 0.38, 0.07, crankArmMat, 0, 0.19, 0.08);
 crankGroup.add(crankArm);
 const crankHandleMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.6, emissive: 0x000000, emissiveIntensity: 0.6 });
 const crankHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.26, 12), crankHandleMat);
-crankHandle.rotation.x = Math.PI / 2; crankHandle.position.set(0, 0.5, 0.22); crankHandle.castShadow = true;
+crankHandle.rotation.x = Math.PI / 2; crankHandle.position.set(0, 0.36, 0.22); crankHandle.castShadow = true;
 crankGroup.add(crankHandle);
 const crankMeshes = [crankDisc, crankArm, crankHandle];
 // Electric top unit (hidden in manual mode)
@@ -361,19 +411,19 @@ const TRAY_BASE_Z = 0.15;
 // ---------- Chest ----------
 // Chest sits to the right and set back from the sharpener, so the crank
 // sweep clears it with room to spare instead of crossing its face.
-const CHEST_POS = { x: 2.05, z: -0.6 };
+const CHEST_POS = { x: 1.95, z: -0.7 };
 const chest = new THREE.Group();
 chest.position.set(CHEST_POS.x, 0, CHEST_POS.z);
 scene.add(chest);
-chest.add(box(1.2, 0.7, 0.9, mat(0x7a5230, 0.8), 0, 0.35, 0));
+chest.add(box(1.05, 0.7, 0.9, mat(0x7a5230, 0.8), 0, 0.35, 0));
 const lidPivot = new THREE.Group();
 lidPivot.position.set(0, 0.7, -0.45);
 chest.add(lidPivot);
-const lid = box(1.2, 0.18, 0.9, mat(0x8a5f36, 0.8), 0, 0.09, 0.45);
+const lid = box(1.05, 0.18, 0.9, mat(0x8a5f36, 0.8), 0, 0.09, 0.45);
 lidPivot.add(lid);
 lidPivot.rotation.x = -0.55;
-chest.add(box(1.22, 0.1, 0.1, mat(0xc9a227, 0.35, 0.8), 0, 0.35, 0.45));
-chest.add(box(1.22, 0.1, 0.1, mat(0xc9a227, 0.35, 0.8), 0, 0.35, -0.45));
+chest.add(box(1.07, 0.1, 0.1, mat(0xc9a227, 0.35, 0.8), 0, 0.35, 0.45));
+chest.add(box(1.07, 0.1, 0.1, mat(0xc9a227, 0.35, 0.8), 0, 0.35, -0.45));
 
 // ---------- Stub tray: a little round dish where spent stubs pile up ----------
 const STUB_TRAY_POS = { x: -0.95, z: 0.95 };
@@ -1036,7 +1086,7 @@ function resize() {
     // sweep, the stub dish (left) and the chest (right) all sit inside
     // the frame with clear space between them.
     camera.fov = 60;
-    camera.position.set(0.3, 1.7, 8.6);
+    camera.position.set(0.3, 1.7, 9.0);
     camera.lookAt(0.30, 0.9, 0);
   } else {
     camera.fov = 40;
@@ -1138,7 +1188,13 @@ window.SHARP = {
   tray: () => ({ slide: traySlide, state: dumpState, tilt: trayTilt }),
   pileCount: () => curls.filter((c) => c.active && c.inPile).length,
   crank: () => ({ spin: crankSpin, hover: crankHover }),
-  stubCount: () => S.stubs
+  stubCount: () => S.stubs,
+  // Project a world point to CSS screen pixels (for layout verification).
+  project(x, y, z) {
+    const v = new THREE.Vector3(x, y, z);
+    v.project(camera);
+    return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
+  }
 };
 </script>
 </body>
