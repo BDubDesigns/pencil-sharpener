@@ -526,8 +526,16 @@ function updatePencilVisual() {
 }
 function placePencil() {
   if (S.mode === 'manual') {
+    // The pencil lies horizontal, tip INSIDE the hole. Local +y maps to
+    // world -x (rotation.z = PI/2), so the body end (local y 0.32) lands
+    // at groupX - 0.32. The sharpener's left face is at x -0.85, so
+    // groupX -0.46 puts the body end at -0.78, just inside the face: the
+    // visible pencil emerges from the hole and the tip apex (local y
+    // 0.32 - tipH, i.e. -0.75 blunt to -0.44 sharp) is always inside the
+    // body, never floating in mid-air. As the pencil grinds shorter the
+    // eraser end rides right toward the hole; the tip never slides out.
     pencilGroup.rotation.set(0, 0, Math.PI / 2);
-    pencilGroup.position.set(-0.86, 0.62, 0);
+    pencilGroup.position.set(-0.46, 0.62, 0);
   } else {
     pencilGroup.rotation.set(0, 0, 0);
     pencilGroup.position.set(0, 1.62 - feedDepth * 0.16, 0);

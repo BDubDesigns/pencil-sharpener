@@ -5,6 +5,35 @@ sharpening a pencil. Built in a single `index.html` (Three.js vendored
 locally in `vendor/`, no runtime CDN dependency), mobile-first, touch
 friendly. Synthesized WebAudio sounds only, no audio assets.
 
+## Slice: pencil actually IN the hole (Nov 25, after Brandon's third playtest)
+
+Brandon: "Are you not even looking at it? The pencil isn't anywhere near the hole lol"
+
+- Root cause: the pencil group sat at x -0.86, the same x as the hole, so
+  the body end (local y 0.32) landed at x -1.18 and a fresh blunt tip
+  apex at -1.15 — a 0.30-unit gap of thin air between the pencil and the
+  hole face (-0.85). On desktop it read as "almost there"; on a portrait
+  phone it read as nowhere near. The headless portrait screenshots had
+  shown the same gap all along; nobody had actually looked at whether
+  the pencil touched the hole.
+- Fix: group moved to x -0.46, so the body end lands at -0.78, just
+  inside the face. The pencil body passes through the face plane: the
+  visible pencil emerges from the hole, tip apex (-0.75 blunt to -0.44
+  sharp) always inside the body. As it grinds shorter the eraser rides
+  right toward the hole; the tip never slides out. Nothing else moved:
+  same height as the hole, same z, label still anchored to the eraser.
+- Verified in a real mobile portrait viewport (390x844, DPR 2.25):
+  body end projects 7px right of (inside) the hole face at the same
+  height (0px vertical offset), tip apex 9px further in; zoomed
+  screenshots of the hole region at blunt and at sharpness 100 both
+  show the yellow body entering the dark hole disc with no gap. Phase 1
+  holds (sharpness 100, length 1.0), phase 2 holds (length 0.496,
+  sharpness 100, eraser moved right 67px toward the hole, label gap vs
+  eraser constant). Stump banks (stubs 3 -> 4), fresh blunt spawns.
+  Dump re-verified (tray 60 -> 0, wallet 0 -> 60; ~8s wall time under
+  SwiftShader's slow clock). Desktop 1280x800: inside by 12px, vertical
+  -1px. Zero console errors in both viewports.
+
 ## Slice: label anchoring + two-phase pencil + stub tips (Nov 25, after Brandon's second playtest)
 
 Brandon: "The text label recenters as you cut. That's terrible lol"
