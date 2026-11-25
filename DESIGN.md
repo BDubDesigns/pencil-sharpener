@@ -5,6 +5,41 @@ sharpening a pencil. Built in a single `index.html` (Three.js vendored
 locally in `vendor/`, no runtime CDN dependency), mobile-first, touch
 friendly. Synthesized WebAudio sounds only, no audio assets.
 
+## Slice: label anchoring + two-phase pencil + stub tips (Nov 25, after Brandon's second playtest)
+
+Brandon: "The text label recenters as you cut. That's terrible lol"
+
+- Label anchoring: the decal was a child of the scaled pencil body, so it
+  compressed and recentered as the pencil shortened. Fix: the label is
+  now parented to the pencil group, anchored to the eraser end at a
+  constant world size. Its top sits just below the ferrule band; as the
+  body shortens the visible span shrinks from the tip side only, via
+  texture repeat/offset (repeat.y = k, offset.y = 1 - k), so the print
+  never slides or rescales. Measured: label-top to eraser-top screen gap
+  stayed exactly -21px at length 1.0 (fresh and pointed) and 0.5.
+  At length 0.5 the pencil is visibly shorter, the eraser is in frame,
+  and the text reads "TICONDEROO..." with the tip-side end clipped.
+- Two-phase pencil lifecycle: a fresh pencil now starts UNSHARPENED with
+  a flat/blunt tip (wood cone nearly flat, graphite a tiny dot). Phase 1:
+  cranking sharpens it to a point, sharpness 0 -> 100, length stays
+  full. Phase 2: the point is held and further cranking shrinks length
+  to a stump. Tip mesh visibly changes blunt -> pointed during phase 1
+  (cone height 0.03 -> 0.34, base flush with the body end). Phase 2
+  length loss 0.008 per gained, so a pencil still lasts ~10 crank
+  rotations total. Verified: 2 real crank circles -> sharpness 43,
+  length still 1.0; 64 more steps -> sharpness 100, length 1.0;
+  70 more -> length 0.496, sharpness still 100; ground to a stump ->
+  stub banked (3 -> 4), fresh blunt pencil spawned.
+- Stub tips in the dish: the tip cone's apex pointed INTO the stub body
+  (rotation.z -PI/2), so the tip read as a flat disc. Flipped to apex
+  outward (+PI/2). Stubs also now yaw so their tips point toward the
+  sharpener hole (with deterministic jitter), instead of random
+  directions. Verified by projecting tip vs eraser screen positions:
+  all 4 stubs have tip screen-x >= eraser screen-x (toward the hole).
+- Dump loop re-verified: tray 60 -> 0, wallet 0 -> 60 (took ~7s of wall
+  time under SwiftShader's slow clock, not a game bug). Zero console
+  errors, portrait 390x844 + desktop 1280x800.
+
 ## Slice: five layout nits (Nov 25)
 All five verified nits from the last verification round, fixed in one slice:
 - Chest at frame edge: chest right edge sat exactly at x 390, zero margin.
