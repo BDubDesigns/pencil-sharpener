@@ -259,6 +259,10 @@ scene.add(sun);
 const warm = new THREE.PointLight(0xffc873, 12, 12, 1.6);
 warm.position.set(-3, 3, 2);
 scene.add(warm);
+// Soft fill from the left so the hole side of the sharpener is not lost in shadow
+const fill = new THREE.DirectionalLight(0xfff6e0, 0.45);
+fill.position.set(-4, 4, 4);
+scene.add(fill);
 const surgeLight = new THREE.PointLight(0xffd34d, 0, 8, 1.4);
 surgeLight.position.set(0, 2.5, 1.5);
 scene.add(surgeLight);
@@ -305,7 +309,7 @@ hole.rotation.z = Math.PI / 2; hole.position.set(-0.86, 0.62, 0); sharpener.add(
 // group's local z-axis, so a circular drag on screen turns it 1:1.
 const crankGroup = new THREE.Group();
 crankGroup.position.set(0.42, 0.78, 0.68);
-crankGroup.scale.setScalar(1.35);
+crankGroup.scale.setScalar(1.55);
 sharpener.add(crankGroup);
 const crankDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 20), mat(0xd7dade, 0.25, 0.9));
 crankDisc.rotation.x = Math.PI / 2; crankDisc.castShadow = true; crankGroup.add(crankDisc);
@@ -354,8 +358,9 @@ trayGroup.add(pile);
 const TRAY_BASE_Z = 0.35;
 
 // ---------- Chest ----------
+const CHEST_POS = { x: 1.45, z: 0.05 };
 const chest = new THREE.Group();
-chest.position.set(1.45, 0, 0.9);
+chest.position.set(CHEST_POS.x, 0, CHEST_POS.z);
 scene.add(chest);
 chest.add(box(1.35, 0.7, 0.95, mat(0x7a5230, 0.8), 0, 0.35, 0));
 const lidPivot = new THREE.Group();
@@ -368,7 +373,7 @@ chest.add(box(1.37, 0.1, 0.1, mat(0xc9a227, 0.35, 0.8), 0, 0.35, 0.48));
 chest.add(box(1.37, 0.1, 0.1, mat(0xc9a227, 0.35, 0.8), 0, 0.35, -0.48));
 
 // ---------- Stub tray: a little round dish where spent stubs pile up ----------
-const STUB_TRAY_POS = { x: -1.05, z: 1.45 };
+const STUB_TRAY_POS = { x: -0.95, z: 0.95 };
 const stubTray = new THREE.Group();
 stubTray.position.set(STUB_TRAY_POS.x, 0, STUB_TRAY_POS.z);
 scene.add(stubTray);
@@ -457,19 +462,19 @@ for (let i = 0; i < CURL_MAX; i++) {
   const m = new THREE.Mesh(curlGeo, curlMats[i % 3]);
   m.visible = false; m.castShadow = true;
   scene.add(m);
-  curls.push({ mesh: m, vel: new THREE.Vector3(), spin: new THREE.Vector3(), life: 0, active: false, rest: false, inPile: false });
+  curls.push({ mesh: m, vel: new THREE.Vector3(), spin: new THREE.Vector3(), life: 0, active: false, rest: false, inPile: false, settle: null });
 }
 let curlIdx = 0;
 function spawnCurl(pos, burst) {
   const c = curls[curlIdx]; curlIdx = (curlIdx + 1) % CURL_MAX;
   if (c.inPile) { scene.attach(c.mesh); c.inPile = false; }
-  c.active = true; c.rest = false; c.life = 1.4;
+  c.active = true; c.rest = false; c.life = 1.4; c.settle = null;
   c.mesh.visible = true;
   c.mesh.position.copy(pos);
   c.mesh.scale.setScalar(0.7 + Math.random() * 0.7);
   c.mesh.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
-  const spread = burst ? 1.6 : 0.5;
-  c.vel.set((Math.random() - 0.5) * spread, 0.6 + Math.random() * (burst ? 2.2 : 0.9), (Math.random() - 0.2) * spread + (burst ? 0.6 : 0.2));
+  const spread = burst ? 1.6 : 0.7;
+  c.vel.set((Math.random() - 0.5) * spread + (burst ? 0 : 0.2), 0.6 + Math.random() * (burst ? 2.2 : 0.9), (Math.random() - 0.2) * spread + (burst ? 0.6 : 0.2));
   c.spin.set(Math.random() * 6 - 3, Math.random() * 6 - 3, Math.random() * 6 - 3);
 }
 function pencilTipWorld() {
@@ -481,6 +486,21 @@ function pencilTipWorld() {
 function trayFootprintContains(p) {
   const cx = trayShiftX, cz = TRAY_BASE_Z + traySlide * 1.15;
   return Math.abs(p.x - cx) < 0.8 && Math.abs(p.z - cz) < 0.55;
+}
+// Where a landed curl settles in the tray: a jittered grid across the whole
+// tray footprint, stacking in layers, so the heap spreads evenly instead of
+// clumping under the hole. Positions are tray-local (the mesh is attached
+// to trayGroup when it lands). Deterministic per slot index.
+function hash01(n) { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); }
+function pileSlotTarget(slot) {
+  const cols = 8, rows = 5;
+  const col = slot % cols, row = Math.floor(slot / cols) % rows, layer = Math.floor(slot / (cols * rows));
+  const j1 = hash01(slot * 2 + 1) - 0.5, j2 = hash01(slot * 2 + 2) - 0.5;
+  return new THREE.Vector3(
+    -0.58 + col * 0.165 + j1 * 0.07,
+    0.15 + layer * 0.055,
+    -0.32 + row * 0.16 + j2 * 0.07
+  );
 }
 function updateCurls(dt) {
   for (const c of curls) {
@@ -497,13 +517,19 @@ function updateCurls(dt) {
           c.rest = true;
           c.mesh.rotation.x = Math.random() * 0.6 - 0.3; c.mesh.rotation.z = Math.random() * 0.6 - 0.3;
           if (trayFootprintContains(c.mesh.position)) {
-            // Landed in the tray: it stays there and rides with the tray
+            // Landed in the tray: it stays there, rides with the tray, and
+            // scoots to its slot in the heap so the pile spreads out.
             c.inPile = true;
             c.life = Infinity;
             trayGroup.attach(c.mesh);
+            const slot = curls.filter((o) => o.inPile).length - 1;
+            c.settle = pileSlotTarget(slot);
           }
         }
       }
+    } else if (c.settle) {
+      c.mesh.position.lerp(c.settle, Math.min(1, dt * 7));
+      if (c.mesh.position.distanceTo(c.settle) < 0.015) c.settle = null;
     }
     c.life -= dt;
     if (c.life <= 0) { c.active = false; c.inPile = false; c.mesh.visible = false; }
@@ -600,7 +626,7 @@ function pourCurl() {
   );
   spawnCurl(p, true);
   const c = curls[(curlIdx - 1 + CURL_MAX) % CURL_MAX];
-  c.vel.set((1.45 - p.x) * 0.9, 1.6 + Math.random(), (0.9 - p.z) * 0.9);
+  c.vel.set((CHEST_POS.x - p.x) * 0.9, 1.6 + Math.random(), (CHEST_POS.z - p.z) * 0.9);
 }
 function startDumpPour() {
   dumpState = 'dumping'; dumpTimer = 0.9; pourAcc = 0;
@@ -613,9 +639,9 @@ function startDumpPour() {
   for (const c of curls) {
     if (c.active && c.inPile) {
       scene.attach(c.mesh);
-      c.inPile = false; c.rest = false; c.life = 1.2;
+      c.inPile = false; c.rest = false; c.life = 1.2; c.settle = null;
       const p = c.mesh.position;
-      c.vel.set((1.45 - p.x) * 0.9, 1.8 + Math.random(), (0.9 - p.z) * 0.9);
+      c.vel.set((CHEST_POS.x - p.x) * 0.9, 1.8 + Math.random(), (CHEST_POS.z - p.z) * 0.9);
       c.spin.set(Math.random() * 6 - 3, Math.random() * 6 - 3, Math.random() * 6 - 3);
     }
   }
@@ -965,10 +991,11 @@ function resize() {
   renderer.setSize(w, h, true);
   camera.aspect = w / h;
   if (camera.aspect < 0.75) {
-    // Portrait: tight straight-on hero shot, crank and hole in frame
-    camera.fov = 55;
-    camera.position.set(0.35, 1.7, 5.8);
-    camera.lookAt(-0.15, 0.9, 0);
+    // Portrait: straight-on hero shot, but pulled back enough that the
+    // stub dish (left) and chest (right) both sit inside the frame.
+    camera.fov = 62;
+    camera.position.set(0.3, 1.7, 7.6);
+    camera.lookAt(0.22, 0.9, 0);
   } else {
     camera.fov = 40;
     camera.position.set(0.4, 2.3, 7.6);
