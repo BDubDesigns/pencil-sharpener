@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pencil Sharpener</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #f5e9d3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  #scene { position: fixed; inset: 0; touch-action: none; display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  .panel { background: rgba(255, 252, 245, 0.92); border: 2px solid #d8c9a8; border-radius: 14px; box-shadow: 0 2px 10px rgba(90, 60, 20, 0.18); }
+  #topbar { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 10px; right: 10px; display: flex; gap: 8px; align-items: stretch; }
+  #wallet { flex: 1; padding: 8px 12px; display: flex; align-items: baseline; gap: 8px; }
+  #wallet .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8a6d3b; font-weight: 700; }
+  #wallet .value { font-size: 24px; font-weight: 800; color: #4a2f10; line-height: 1; }
+  #wallet .sub { font-size: 11px; color: #8a6d3b; }
+  .icon-btn { pointer-events: auto; min-width: 52px; padding: 8px 10px; font-size: 13px; font-weight: 700; color: #4a2f10; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 14px; }
+  .icon-btn.active { background: #ffe9a8; border-color: #c9a227; }
+  #meters { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 58px); left: 10px; width: min(240px, 55vw); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .meter-row { font-size: 12px; font-weight: 700; color: #4a2f10; }
+  .meter-row .row-head { display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .meter { height: 12px; background: #e8dcc0; border-radius: 6px; overflow: hidden; position: relative; }
+  .meter .fill { height: 100%; border-radius: 6px; transition: width 0.12s linear; }
+  #sharpFill { background: linear-gradient(90deg, #e8b64c, #f5d76e); }
+  #trayFill { background: linear-gradient(90deg, #b08954, #d9b380); }
+  #feedWrap { display: none; }
+  #feedMeter { height: 14px; }
+  #feedGreen { position: absolute; top: 0; bottom: 0; background: rgba(90, 180, 90, 0.55); }
+  #feedRed { position: absolute; top: 0; bottom: 0; background: rgba(200, 60, 60, 0.55); }
+  #feedNeedle { position: absolute; top: -2px; bottom: -2px; width: 4px; background: #2b2b2b; border-radius: 2px; transform: translateX(-2px); }
+  #feedLabel { color: #666; font-weight: 600; }
+  #surge { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 116px); left: 50%; transform: translateX(-50%); padding: 8px 16px; background: #fff3b0; border: 2px solid #e8b64c; color: #7a5200; font-weight: 800; font-size: 15px; border-radius: 999px; display: none; box-shadow: 0 0 24px rgba(232, 182, 76, 0.9); animation: pulse 0.7s infinite alternate; white-space: nowrap; }
+  @keyframes pulse { from { box-shadow: 0 0 12px rgba(232,182,76,0.6); } to { box-shadow: 0 0 30px rgba(232,182,76,1); } }
+  #toast { position: absolute; top: 38%; left: 50%; transform: translateX(-50%); padding: 10px 18px; font-size: 17px; font-weight: 800; color: #4a2f10; opacity: 0; transition: opacity 0.25s; text-align: center; pointer-events: none; white-space: nowrap; }
+  #hint { position: absolute; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 86px); left: 50%; transform: translateX(-50%); max-width: 92vw; text-align: center; line-height: 1.3; font-size: 14px; font-weight: 600; color: #6b5233; background: rgba(255,252,245,0.85); padding: 7px 14px; border-radius: 999px; pointer-events: none; }
+  #controls { position: absolute; bottom: max(12px, env(safe-area-inset-bottom)); left: 10px; right: 10px; display: flex; gap: 8px; }
+  .ctl-btn { pointer-events: auto; flex: 1; padding: 14px 6px; font-size: 15px; font-weight: 800; color: #fff; background: #4a6b3a; border: none; border-radius: 14px; cursor: pointer; box-shadow: 0 3px 0 #33502a; }
+  .ctl-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #33502a; }
+  .ctl-btn.secondary { background: #8a6d3b; box-shadow: 0 3px 0 #6b5233; }
+  .ctl-btn:disabled { opacity: 0.45; }
+  #modeBtn { background: #3a5a7a; box-shadow: 0 3px 0 #2a415a; }
+  #shop { position: fixed; inset: 0; z-index: 20; background: rgba(40, 28, 10, 0.55); display: none; align-items: flex-end; justify-content: center; }
+  #shop.open { display: flex; }
+  #shopCard { width: 100%; max-width: 520px; max-height: 78vh; overflow-y: auto; background: #fffaf0; border-radius: 20px 20px 0 0; padding: 16px 16px max(20px, env(safe-area-inset-bottom)); }
+  #shopCard h2 { font-size: 20px; color: #4a2f10; margin-bottom: 4px; }
+  #shopCard .shop-sub { font-size: 13px; color: #8a6d3b; margin-bottom: 12px; }
+  .shop-item { display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-top: 1px solid #e8dcc0; }
+  .shop-item .info { flex: 1; }
+  .shop-item .name { font-size: 15px; font-weight: 800; color: #4a2f10; }
+  .shop-item .desc { font-size: 12px; color: #6b5233; margin-top: 2px; line-height: 1.35; }
+  .buy-btn { pointer-events: auto; min-width: 86px; padding: 10px 12px; font-size: 14px; font-weight: 800; color: #fff; background: #4a6b3a; border: none; border-radius: 10px; cursor: pointer; }
+  .buy-btn:disabled { opacity: 0.4; }
+  .buy-btn.owned { background: #8a8a8a; }
+  #closeShop { width: 100%; margin-top: 12px; padding: 13px; font-size: 15px; font-weight: 800; color: #4a2f10; background: #e8dcc0; border: none; border-radius: 12px; cursor: pointer; }
+  #title { position: absolute; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 150px); left: 50%; transform: translateX(-50%); font-size: 13px; color: #a08a63; font-weight: 600; pointer-events: none; white-space: nowrap; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="hud">
+  <div id="topbar">
+    <div id="wallet" class="panel">
+      <span class="label">Shavings</span>
+      <span class="value" id="walletValue">0</span>
+      <span class="sub" id="walletSub">in chest</span>
+    </div>
+    <button class="icon-btn panel" id="zenBtn" title="Zen mode">Zen</button>
+    <button class="icon-btn panel" id="soundBtn" title="Sound on or off">Sound</button>
+  </div>
+  <div id="meters" class="panel">
+    <div class="meter-row">
+      <div class="row-head"><span>Pencil sharpness</span><span id="sharpPct">0%</span></div>
+      <div class="meter"><div class="fill" id="sharpFill" style="width:0%"></div></div>
+    </div>
+    <div class="meter-row">
+      <div class="row-head"><span>Tray</span><span id="trayPct">0 / 100</span></div>
+      <div class="meter"><div class="fill" id="trayFill" style="width:0%"></div></div>
+    </div>
+    <div class="meter-row" id="feedWrap">
+      <div class="row-head"><span>Feed rate</span><span id="feedLabel">hold to feed</span></div>
+      <div class="meter" id="feedMeter">
+        <div id="feedGreen"></div><div id="feedRed"></div><div id="feedNeedle" style="left:0%"></div>
+      </div>
+    </div>
+  </div>
+  <div id="surge">POWER SURGE! Push it!</div>
+  <div id="toast" class="panel"></div>
+  <div id="hint">Drag in circles around the crank to sharpen</div>
+  <div id="title">Pencil Sharpener - a satisfying little game</div>
+  <div id="controls">
+    <button class="ctl-btn" id="dumpBtn">Slide tray out</button>
+    <button class="ctl-btn secondary" id="shopBtn">Shop</button>
+    <button class="ctl-btn" id="modeBtn">Manual</button>
+  </div>
+</div>
+<div id="shop">
+  <div id="shopCard">
+    <h2>Workshop</h2>
+    <div class="shop-sub">Everything costs shavings. Upgrades change how the sharpener feels, not just the numbers.</div>
+    <div id="shopItems"></div>
+    <button id="closeShop">Done</button>
+  </div>
+</div>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ---------- State ----------
+const SAVE_KEY = 'pencilSharpenerSaveV1';
+const defaultState = () => ({
+  wallet: 0, tray: 0, sharpness: 0, pencilsDone: 0, pencilType: 0,
+  mode: 'manual', zen: false, sound: true,
+  upgrades: { electric: 0, blade: 0, motor: 0, tray: 0, gears: 0, colors: 0, autoempty: 0 }
+});
+let S = defaultState();
+try {
+  const raw = localStorage.getItem(SAVE_KEY);
+  if (raw) { const parsed = JSON.parse(raw); S = Object.assign(defaultState(), parsed); S.upgrades = Object.assign(defaultState().upgrades, parsed.upgrades || {}); }
+} catch (e) { /* fresh start */ }
+function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} }
+
+const PENCIL_COLORS = [0xf2c230, 0xd94f3d, 0x3d7ad9, 0x3da85c, 0x8a5cc7, 0xe87aa1];
+const PENCIL_NAMES = ['Yellow', 'Red', 'Blue', 'Green', 'Purple', 'Pink'];
+const TRAY_CAPS = [100, 160, 240];
+const SHOP = [
+  { id: 'electric', name: 'Electric sharpener', desc: 'Ditch the crank. Press and hold to feed the pencil. Watch the feed meter, too fast bogs the motor down.', costs: [150], max: 1 },
+  { id: 'blade', name: 'Sharper blades', desc: 'A keener edge. Cuts faster and peels finer, curlier shavings.', costs: [80, 220, 500], max: 3 },
+  { id: 'motor', name: 'Better motor', desc: 'More torque. Lets you push the pencil harder before it bogs down, and feeds faster.', costs: [120, 320, 700], max: 3 },
+  { id: 'tray', name: 'Bigger tray', desc: 'A deeper shavings tray, so you sharpen longer between dumps.', costs: [100, 260], max: 2 },
+  { id: 'gears', name: 'Brass gear set', desc: 'Smoother drive, more shavings peeled off every pass.', costs: [200, 550, 1200], max: 3 },
+  { id: 'colors', name: 'Colored pencils', desc: 'A box of colored pencils. They sharpen the same, they just look nicer doing it.', costs: [150], max: 1 },
+  { id: 'autoempty', name: 'Auto-empty tray', desc: 'A little chute dumps the tray into the chest by itself when it fills up.', costs: [800], max: 1 }
+];
+const trayCapacity = () => TRAY_CAPS[S.upgrades.tray];
+const bladeMult = () => 1 + 0.25 * S.upgrades.blade;
+const gearMult = () => 1 + 0.25 * S.upgrades.gears;
+const bogThreshold = () => (S.surgeActive ? 1.5 : 0.62 + 0.08 * S.upgrades.motor);
+const feedSpeed = () => 1 + 0.15 * S.upgrades.motor;
+
+// ---------- Audio (synthesized, no assets) ----------
+const AudioFX = {
+  ctx: null, master: null, motorOsc: null, motorGain: null, motorFilter: null, motorOn: false,
+  ensure() {
+    if (!this.ctx) {
+      try {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.master = this.ctx.createGain(); this.master.gain.value = 0.5; this.master.connect(this.ctx.destination);
+      } catch (e) { this.ctx = null; }
+    }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    return this.ctx;
+  },
+  blip(freq, dur, type, vol, slideTo) {
+    if (!S.sound || !this.ensure()) return;
+    const t = this.ctx.currentTime, o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    g.gain.setValueAtTime(vol || 0.15, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.02);
+  },
+  noiseBurst(dur, filterFreq, vol, type) {
+    if (!S.sound || !this.ensure()) return;
+    const t = this.ctx.currentTime, len = Math.max(1, Math.floor(this.ctx.sampleRate * dur));
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type = type || 'bandpass'; f.frequency.value = filterFreq || 1200;
+    const g = this.ctx.createGain(); g.gain.setValueAtTime(vol || 0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f); f.connect(g); g.connect(this.master); src.start(t);
+  },
+  crankClick() { this.noiseBurst(0.05, 2600, 0.22, 'highpass'); this.blip(180, 0.04, 'square', 0.05); },
+  curl() { this.noiseBurst(0.09, 4200, 0.10, 'highpass'); },
+  dump() { this.noiseBurst(0.35, 500, 0.3, 'lowpass'); this.blip(300, 0.12, 'sine', 0.12, 140); },
+  surge() { this.blip(523, 0.15, 'sine', 0.18); setTimeout(() => this.blip(784, 0.2, 'sine', 0.18), 110); },
+  pencilDone() { [523, 659, 784].forEach((f, i) => setTimeout(() => this.blip(f, 0.18, 'sine', 0.16), i * 90)); },
+  click() { this.blip(700, 0.05, 'sine', 0.1); },
+  motorStart() {
+    if (!this.ensure() || this.motorOn) return;
+    this.motorOn = true;
+    this.motorOsc = this.ctx.createOscillator(); this.motorOsc.type = 'sawtooth'; this.motorOsc.frequency.value = 70;
+    this.motorFilter = this.ctx.createBiquadFilter(); this.motorFilter.type = 'lowpass'; this.motorFilter.frequency.value = 500;
+    this.motorGain = this.ctx.createGain(); this.motorGain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+    this.motorGain.gain.setTargetAtTime(0.07, this.ctx.currentTime, 0.1);
+    this.motorOsc.connect(this.motorFilter); this.motorFilter.connect(this.motorGain); this.motorGain.connect(this.master);
+    this.motorOsc.start();
+  },
+  motorSet(speed01, bogging) {
+    if (!this.motorOn || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    const freq = bogging ? 45 + speed01 * 20 : 65 + speed01 * 85;
+    this.motorOsc.frequency.setTargetAtTime(freq, t, 0.06);
+    this.motorFilter.frequency.setTargetAtTime(bogging ? 240 : 420 + speed01 * 500, t, 0.06);
+  },
+  motorStop() {
+    if (!this.motorOn || !this.ctx) return;
+    this.motorOn = false;
+    const t = this.ctx.currentTime;
+    this.motorGain.gain.setTargetAtTime(0.0001, t, 0.08);
+    const osc = this.motorOsc; setTimeout(() => { try { osc.stop(); } catch (e) {} }, 400);
+  }
+};
+
+// ---------- Three.js scene ----------
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf5e9d3);
+scene.fog = new THREE.Fog(0xf5e9d3, 14, 26);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+camera.position.set(0, 3.7, 6.8);
+camera.lookAt(0, 0.9, 0);
+
+scene.add(new THREE.HemisphereLight(0xfff6e0, 0x8a6a45, 0.85));
+const sun = new THREE.DirectionalLight(0xfff0d0, 1.6);
+sun.position.set(4, 8, 5);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.left = -6; sun.shadow.camera.right = 6;
+sun.shadow.camera.top = 6; sun.shadow.camera.bottom = -6;
+scene.add(sun);
+const warm = new THREE.PointLight(0xffc873, 12, 12, 1.6);
+warm.position.set(-3, 3, 2);
+scene.add(warm);
+const surgeLight = new THREE.PointLight(0xffd34d, 0, 8, 1.4);
+surgeLight.position.set(0, 2.5, 1.5);
+scene.add(surgeLight);
+
+function mat(color, rough, metal) {
+  return new THREE.MeshStandardMaterial({ color, roughness: rough == null ? 0.7 : rough, metalness: metal || 0 });
+}
+function box(w, h, d, material, x, y, z, shadow) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  m.position.set(x || 0, y || 0, z || 0);
+  if (shadow !== false) { m.castShadow = true; m.receiveShadow = true; }
+  return m;
+}
+
+// Desk
+const desk = box(14, 0.3, 9, mat(0x9a6b40, 0.9), 0, -0.15, 0);
+scene.add(desk);
+// Paper stack and eraser props
+const paper = box(1.6, 0.06, 2.1, mat(0xfdfdf8, 0.95), -2.9, 0.03, -1.2);
+paper.rotation.y = 0.25; scene.add(paper);
+const paper2 = box(1.5, 0.05, 2.0, mat(0xf4f1e6, 0.95), -2.88, 0.09, -1.18);
+paper2.rotation.y = 0.32; scene.add(paper2);
+const eraser = box(0.5, 0.14, 0.2, mat(0xe87aa1, 0.8), 2.2, 0.07, 1.3);
+eraser.rotation.y = -0.4; scene.add(eraser);
+
+// ---------- Sharpener ----------
+const sharpener = new THREE.Group();
+sharpener.rotation.y = 0.55;
+scene.add(sharpener);
+const bodyMat = mat(0x2f5d3a, 0.45, 0.55);
+const body = box(1.7, 1.0, 1.25, bodyMat, 0, 0.62, 0);
+sharpener.add(body);
+const topPlate = box(1.74, 0.1, 1.29, mat(0xb8bcc2, 0.3, 0.85), 0, 1.15, 0);
+sharpener.add(topPlate);
+// Feet
+[[-0.7, -0.5], [0.7, -0.5], [-0.7, 0.5], [0.7, 0.5]].forEach(([x, z]) => {
+  const f = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.12, 10), mat(0x222222, 0.8));
+  f.position.set(x, 0.06, z); sharpener.add(f);
+});
+// Manual pencil hole on the left face
+const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.1, 16), mat(0x111111, 0.6));
+hole.rotation.z = Math.PI / 2; hole.position.set(-0.86, 0.62, 0); sharpener.add(hole);
+// Crank on the right face
+const crankGroup = new THREE.Group();
+crankGroup.position.set(0.92, 0.62, 0);
+crankGroup.scale.setScalar(1.45);
+sharpener.add(crankGroup);
+const crankDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 20), mat(0xd7dade, 0.25, 0.9));
+crankDisc.rotation.z = Math.PI / 2; crankDisc.castShadow = true; crankGroup.add(crankDisc);
+const crankArm = box(0.07, 0.52, 0.07, mat(0x4a4d52, 0.4, 0.7), 0, 0.26, 0.1);
+crankGroup.add(crankArm);
+const crankHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.26, 12), mat(0x3a2a1a, 0.6));
+crankHandle.rotation.z = Math.PI / 2; crankHandle.position.set(0, 0.5, 0.22); crankHandle.castShadow = true;
+crankGroup.add(crankHandle);
+// Electric top unit (hidden in manual mode)
+const electricUnit = new THREE.Group();
+electricUnit.visible = false;
+sharpener.add(electricUnit);
+electricUnit.add(box(0.95, 0.4, 0.95, mat(0x3a3f44, 0.4, 0.6), 0, 1.38, 0));
+const eHole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.08, 16), mat(0x0a0a0a, 0.6));
+eHole.position.set(0, 1.6, 0); electricUnit.add(eHole);
+const ledMat = new THREE.MeshStandardMaterial({ color: 0x222222, emissive: 0x35d07f, emissiveIntensity: 0.4 });
+const led = box(0.6, 0.05, 0.06, ledMat, 0, 1.32, 0.49);
+electricUnit.add(led);
+
+// ---------- Tray ----------
+const trayGroup = new THREE.Group();
+trayGroup.position.set(0, 0.1, 0.35);
+scene.add(trayGroup);
+const trayBase = box(1.5, 0.12, 1.0, mat(0x6b4a2f, 0.7), 0, 0.06, 0);
+trayGroup.add(trayBase);
+trayGroup.add(box(1.5, 0.1, 0.06, mat(0x7d583a, 0.7), 0, 0.14, 0.5));
+trayGroup.add(box(1.5, 0.1, 0.06, mat(0x7d583a, 0.7), 0, 0.14, -0.5));
+trayGroup.add(box(0.06, 0.1, 1.0, mat(0x7d583a, 0.7), -0.75, 0.14, 0));
+trayGroup.add(box(0.06, 0.1, 1.0, mat(0x7d583a, 0.7), 0.75, 0.14, 0));
+const trayHandle = box(0.5, 0.08, 0.08, mat(0x4a2f10, 0.6), 0, 0.1, 0.56);
+trayGroup.add(trayHandle);
+const pileMat = mat(0xd9b380, 0.95);
+const pile = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), pileMat);
+pile.scale.set(1, 0.1, 0.65); pile.position.set(0, 0.14, 0); pile.visible = false;
+trayGroup.add(pile);
+const TRAY_BASE_Z = 0.35;
+
+// ---------- Chest ----------
+const chest = new THREE.Group();
+chest.position.set(2.2, 0, 0.1);
+scene.add(chest);
+chest.add(box(1.35, 0.7, 0.95, mat(0x7a5230, 0.8), 0, 0.35, 0));
+const lidPivot = new THREE.Group();
+lidPivot.position.set(0, 0.7, -0.475);
+chest.add(lidPivot);
+const lid = box(1.35, 0.18, 0.95, mat(0x8a5f36, 0.8), 0, 0.09, 0.475);
+lidPivot.add(lid);
+lidPivot.rotation.x = -0.55;
+chest.add(box(1.37, 0.1, 0.1, mat(0xc9a227, 0.35, 0.8), 0, 0.35, 0.48));
+chest.add(box(1.37, 0.1, 0.1, mat(0xc9a227, 0.35, 0.8), 0, 0.35, -0.48));
+
+// ---------- Pencil ----------
+const pencilGroup = new THREE.Group();
+scene.add(pencilGroup);
+const pencilBodyMat = new THREE.MeshStandardMaterial({ color: PENCIL_COLORS[S.pencilType], roughness: 0.55 });
+const pencilBody = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 1.5, 6), pencilBodyMat);
+pencilBody.position.y = 1.07; pencilBody.castShadow = true;
+const woodMat = mat(0xe8c99a, 0.85);
+const woodCone = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.34, 12), woodMat);
+woodCone.rotation.x = Math.PI; woodCone.position.y = 0.17; woodCone.castShadow = true;
+const graphiteMat = mat(0x2b2b2b, 0.4);
+const graphite = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.2, 10), graphiteMat);
+graphite.rotation.x = Math.PI; graphite.position.y = 0.02;
+const eraserMat = mat(0xe87aa1, 0.8);
+const pEraser = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.16, 6), eraserMat);
+pEraser.position.y = 1.9;
+const band = new THREE.Mesh(new THREE.CylinderGeometry(0.088, 0.088, 0.1, 6), mat(0xc9a227, 0.3, 0.85));
+band.position.y = 1.8;
+pencilGroup.add(pencilBody, woodCone, graphite, pEraser, band);
+
+function updatePencilVisual() {
+  const s = S.sharpness / 100;
+  graphite.scale.set(1, 0.3 + s * 1.1, 1);
+  graphite.position.y = 0.02 + s * 0.03;
+  woodCone.scale.set(1, 0.7 + s * 0.5, 1);
+  pencilGroup.scale.set(1, 1 - s * 0.16, 1);
+  pencilBodyMat.color.setHex(PENCIL_COLORS[S.pencilType]);
+}
+function placePencil() {
+  if (S.mode === 'manual') {
+    pencilGroup.rotation.set(0, 0, Math.PI / 2);
+    pencilGroup.position.set(-0.86, 0.62, 0);
+  } else {
+    pencilGroup.rotation.set(0, 0, 0);
+    pencilGroup.position.set(0, 1.62 - feedDepth * 0.16, 0);
+  }
+  updatePencilVisual();
+}
+
+// ---------- Shaving curl particles ----------
+const CURL_MAX = 90;
+const curlGeo = new THREE.TorusGeometry(0.055, 0.014, 6, 10, Math.PI * 1.3);
+const curlMats = [mat(0xdfc08a, 0.95), mat(0xd9b380, 0.95), mat(0xe8c99a, 0.95)];
+const curls = [];
+for (let i = 0; i < CURL_MAX; i++) {
+  const m = new THREE.Mesh(curlGeo, curlMats[i % 3]);
+  m.visible = false; m.castShadow = true;
+  scene.add(m);
+  curls.push({ mesh: m, vel: new THREE.Vector3(), spin: new THREE.Vector3(), life: 0, active: false, rest: false });
+}
+let curlIdx = 0;
+function spawnCurl(pos, burst) {
+  const c = curls[curlIdx]; curlIdx = (curlIdx + 1) % CURL_MAX;
+  c.active = true; c.rest = false; c.life = 1.4;
+  c.mesh.visible = true;
+  c.mesh.position.copy(pos);
+  c.mesh.scale.setScalar(0.7 + Math.random() * 0.7);
+  c.mesh.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+  const spread = burst ? 1.6 : 0.5;
+  c.vel.set((Math.random() - 0.5) * spread, 0.6 + Math.random() * (burst ? 2.2 : 0.9), (Math.random() - 0.2) * spread + (burst ? 0.6 : 0.2));
+  c.spin.set(Math.random() * 6 - 3, Math.random() * 6 - 3, Math.random() * 6 - 3);
+}
+function pencilTipWorld() {
+  const v = new THREE.Vector3();
+  pencilGroup.getWorldPosition(v);
+  v.x += 0.1; v.z += 0.1;
+  return v;
+}
+function updateCurls(dt) {
+  for (const c of curls) {
+    if (!c.active) continue;
+    if (!c.rest) {
+      c.vel.y -= 4.5 * dt;
+      c.mesh.position.addScaledVector(c.vel, dt);
+      c.mesh.rotation.x += c.spin.x * dt; c.mesh.rotation.y += c.spin.y * dt; c.mesh.rotation.z += c.spin.z * dt;
+      const floorY = 0.24;
+      if (c.mesh.position.y <= floorY) {
+        c.mesh.position.y = floorY;
+        if (Math.abs(c.vel.y) > 0.4) { c.vel.y *= -0.25; c.vel.x *= 0.6; c.vel.z *= 0.6; }
+        else { c.rest = true; c.mesh.rotation.x = Math.random() * 0.6 - 0.3; c.mesh.rotation.z = Math.random() * 0.6 - 0.3; }
+      }
+    }
+    c.life -= dt;
+    if (c.life <= 0) { c.active = false; c.mesh.visible = false; }
+    else if (c.life < 0.4) { c.mesh.scale.multiplyScalar(0.92); }
+  }
+}
+
+// ---------- Game logic ----------
+let crankAngle = 0, lastPointerAngle = null, cranking = false;
+let feeding = false, feedRate = 0, feedDepth = 0, bogging = false;
+let traySlide = 0, traySlideTarget = 0, dumpState = 'closed', dumpTimer = 0, autoDumpTimer = 0;
+let surgeActive = false, surgeEndsAt = 0, nextSurgeAt = performance.now() / 1000 + 100 + Math.random() * 60;
+let lastFullToast = 0, toastTimer = null;
+S.surgeActive = false;
+
+const $ = (id) => document.getElementById(id);
+const toastEl = $('toast'), hintEl = $('hint'), surgeEl = $('surge');
+function toast(msg, ms) {
+  toastEl.textContent = msg; toastEl.style.opacity = 1;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastEl.style.opacity = 0; }, ms || 2200);
+}
+function trayFull() { return S.tray >= trayCapacity(); }
+
+function sharpen(amount) {
+  if (trayFull()) {
+    const now = performance.now();
+    if (now - lastFullToast > 2000) { lastFullToast = now; toast('Tray is full! Slide it out and dump it.'); }
+    return 0;
+  }
+  const gained = amount * bladeMult();
+  S.sharpness = Math.min(100, S.sharpness + gained);
+  const shavings = gained * 0.9 * gearMult();
+  S.tray = Math.min(trayCapacity(), S.tray + shavings);
+  updatePencilVisual();
+  if (S.sharpness >= 100) pencilComplete();
+  return gained;
+}
+function pencilComplete() {
+  S.pencilsDone += 1;
+  const bonus = Math.round(25 * gearMult());
+  S.tray = Math.min(trayCapacity(), S.tray + bonus);
+  AudioFX.pencilDone();
+  toast('Perfect point! +' + bonus + ' shavings');
+  S.sharpness = 0;
+  if (S.upgrades.colors) S.pencilType = Math.floor(Math.random() * PENCIL_COLORS.length);
+  else S.pencilType = 0;
+  placePencil();
+  save();
+}
+function crankStep() {
+  sharpen(0.9);
+  AudioFX.crankClick();
+  if (Math.random() < 0.75) spawnCurl(pencilTipWorld(), false);
+  if (Math.random() < 0.3) AudioFX.curl();
+}
+
+// ---------- Dump flow ----------
+function dumpClick() {
+  AudioFX.click();
+  if (dumpState === 'closed') {
+    if (S.tray < 1) { toast('Tray is empty, nothing to dump yet.'); return; }
+    dumpState = 'out'; traySlideTarget = 1;
+    $('dumpBtn').textContent = 'Dump into chest';
+    toast('Tray out. Now dump it in the chest.');
+  } else if (dumpState === 'out') {
+    dumpState = 'dumping'; dumpTimer = 0.9;
+    AudioFX.dump();
+    const chestPos = new THREE.Vector3(2.2, 1.0, 0.1);
+    for (let i = 0; i < 18; i++) {
+      const p = new THREE.Vector3((Math.random() - 0.5) * 1.2, 0.3 + Math.random() * 0.3, TRAY_BASE_Z + traySlide * 1.1 + (Math.random() - 0.5) * 0.6);
+      spawnCurl(p, true);
+      const c = curls[(curlIdx - 1 + CURL_MAX) % CURL_MAX];
+      c.vel.set((chestPos.x - p.x) * 0.9, 1.6 + Math.random(), (chestPos.z - p.z) * 0.9);
+    }
+    lidPivot.rotation.x = -1.1;
+    setTimeout(() => { lidPivot.rotation.x = -0.55; }, 900);
+  }
+}
+function finishDump() {
+  const amount = Math.floor(S.tray);
+  S.wallet += amount; S.tray = 0;
+  dumpState = 'closed'; traySlideTarget = 0;
+  $('dumpBtn').textContent = 'Slide tray out';
+  toast('Dumped ' + amount + ' shavings into the chest');
+  pile.visible = false;
+  save();
+}
+
+// ---------- Surge ----------
+function startSurge() {
+  surgeActive = true; S.surgeActive = true;
+  surgeEndsAt = performance.now() / 1000 + 12;
+  surgeEl.style.display = 'block';
+  AudioFX.surge();
+  toast('Power surge! Feed as fast as you like.');
+}
+function endSurge() {
+  surgeActive = false; S.surgeActive = false;
+  surgeEl.style.display = 'none';
+  nextSurgeAt = performance.now() / 1000 + 100 + Math.random() * 60;
+}
+
+// ---------- Shop ----------
+function renderShop() {
+  const wrap = $('shopItems');
+  wrap.innerHTML = '';
+  for (const item of SHOP) {
+    const lvl = S.upgrades[item.id];
+    const maxed = lvl >= item.max;
+    const cost = maxed ? null : item.costs[lvl];
+    const row = document.createElement('div');
+    row.className = 'shop-item';
+    const lvlText = item.max > 1 ? ' (level ' + lvl + '/' + item.max + ')' : (lvl ? ' (owned)' : '');
+    row.innerHTML = '<div class="info"><div class="name">' + item.name + lvlText + '</div><div class="desc">' + item.desc + '</div></div>';
+    const btn = document.createElement('button');
+    btn.className = 'buy-btn' + (lvl ? ' owned' : '');
+    btn.textContent = maxed ? 'Maxed' : (cost + ' shavings');
+    btn.disabled = maxed || S.wallet < cost;
+    btn.addEventListener('click', () => {
+      if (S.wallet < cost || S.upgrades[item.id] >= item.max) return;
+      S.wallet -= cost; S.upgrades[item.id] += 1;
+      AudioFX.pencilDone();
+      toast(item.name + ' bought!');
+      if (item.id === 'electric') { setMode('electric'); }
+      save(); renderShop(); updateHUD();
+    });
+    row.appendChild(btn);
+    wrap.appendChild(row);
+  }
+}
+
+// ---------- Mode ----------
+function setModeVisuals() {
+  const electric = S.mode === 'electric';
+  crankGroup.visible = !electric;
+  electricUnit.visible = electric;
+  bodyMat.color.setHex(electric ? 0x3a3f44 : 0x2f5d3a);
+  ledMat.emissiveIntensity = electric ? 1.2 : 0.4;
+  $('feedWrap').style.display = electric ? 'block' : 'none';
+  $('modeBtn').textContent = electric ? 'Electric' : 'Manual';
+  hintEl.textContent = electric
+    ? 'Hold to feed. Green is the sweet spot, red bogs the motor.'
+    : 'Drag circles around the crank to sharpen';
+  placePencil();
+}
+function setMode(mode) {
+  if (mode === 'electric' && !S.upgrades.electric) {
+    toast('Buy the electric sharpener in the Shop first.');
+    return;
+  }
+  if (feeding) { feeding = false; AudioFX.motorStop(); }
+  S.mode = mode;
+  setModeVisuals(); save(); updateHUD();
+}
+
+// ---------- Input ----------
+function crankScreenPos() {
+  const v = new THREE.Vector3();
+  crankGroup.getWorldPosition(v);
+  v.project(camera);
+  return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
+}
+function pointerAngle(e) {
+  const p = crankScreenPos();
+  return Math.atan2(e.clientY - p.y, e.clientX - p.x);
+}
+canvas.addEventListener('pointerdown', (e) => {
+  AudioFX.ensure();
+  if (S.mode === 'manual') {
+    cranking = true; lastPointerAngle = pointerAngle(e);
+  } else {
+    feeding = true; AudioFX.motorStart();
+  }
+  e.preventDefault();
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (S.mode === 'manual' && cranking && lastPointerAngle !== null) {
+    const a = pointerAngle(e);
+    let d = a - lastPointerAngle;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    lastPointerAngle = a;
+    if (Math.abs(d) > 0.001) {
+      crankAngle += d;
+      crankGroup.rotation.x = crankAngle;
+      const steps = Math.floor(Math.abs(crankAngle) / 0.26);
+      if (steps > 0) {
+        crankAngle = crankAngle % 0.26;
+        for (let i = 0; i < steps; i++) crankStep();
+      }
+    }
+  }
+});
+function endPointer() {
+  cranking = false; lastPointerAngle = null;
+  if (feeding) { feeding = false; AudioFX.motorStop(); }
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('pointerleave', endPointer);
+
+// ---------- HUD ----------
+function updateHUD() {
+  $('walletValue').textContent = Math.floor(S.wallet);
+  $('sharpPct').textContent = Math.floor(S.sharpness) + '%';
+  $('sharpFill').style.width = S.sharpness + '%';
+  const cap = trayCapacity();
+  $('trayPct').textContent = Math.floor(S.tray) + ' / ' + cap;
+  $('trayFill').style.width = Math.min(100, S.tray / cap * 100) + '%';
+  const greenLo = 0.30, greenHi = Math.max(0.35, bogThreshold() - 0.05);
+  $('feedGreen').style.left = (greenLo * 100) + '%';
+  $('feedGreen').style.width = ((greenHi - greenLo) * 100) + '%';
+  $('feedRed').style.left = (bogThreshold() * 100) + '%';
+  $('feedRed').style.width = ((1 - bogThreshold()) * 100) + '%';
+  $('feedNeedle').style.left = (feedRate * 100) + '%';
+  $('feedLabel').textContent = bogging ? 'bogged down! ease off' : (feeding ? (surgeActive ? 'surge! push it' : 'feeding...') : 'hold to feed');
+  $('feedLabel').style.color = bogging ? '#c0392b' : '#666';
+  const pileScale = Math.min(1, S.tray / cap);
+  pile.visible = S.tray > 1;
+  pile.scale.set(0.3 + pileScale * 0.7, 0.08 + pileScale * 0.14, 0.2 + pileScale * 0.45);
+  $('dumpBtn').disabled = dumpState === 'dumping';
+  $('zenBtn').classList.toggle('active', S.zen);
+  $('soundBtn').textContent = S.sound ? 'Sound' : 'Muted';
+}
+
+// ---------- Buttons ----------
+$('dumpBtn').addEventListener('click', dumpClick);
+$('shopBtn').addEventListener('click', () => { AudioFX.click(); renderShop(); $('shop').classList.add('open'); });
+$('closeShop').addEventListener('click', () => { AudioFX.click(); $('shop').classList.remove('open'); });
+$('shop').addEventListener('click', (e) => { if (e.target.id === 'shop') $('shop').classList.remove('open'); });
+$('modeBtn').addEventListener('click', () => { AudioFX.click(); setMode(S.mode === 'manual' ? 'electric' : 'manual'); });
+$('zenBtn').addEventListener('click', () => {
+  S.zen = !S.zen;
+  if (S.zen && surgeActive) endSurge();
+  AudioFX.click();
+  toast(S.zen ? 'Zen mode on. Just sharpening, no surges.' : 'Zen mode off. Surges are back.');
+  save(); updateHUD();
+});
+$('soundBtn').addEventListener('click', () => {
+  S.sound = !S.sound;
+  if (!S.sound) AudioFX.motorStop();
+  save(); updateHUD();
+});
+
+// ---------- Resize ----------
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  if (camera.aspect < 0.6) {
+    camera.fov = 55;
+    camera.position.set(0, 4.4, 10.2);
+    camera.lookAt(-0.2, 1.0, 0);
+  } else {
+    camera.fov = 40;
+    camera.position.set(0, 3.7, 6.8);
+    camera.lookAt(0, 0.9, 0);
+  }
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- Main loop ----------
+const clock = new THREE.Clock();
+let hudTimer = 0;
+function loop() {
+  requestAnimationFrame(loop);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const now = performance.now() / 1000;
+
+  // Electric feed
+  if (S.mode === 'electric') {
+    if (feeding) {
+      feedRate = Math.min(1, feedRate + dt * 1.3 * feedSpeed());
+      bogging = feedRate > bogThreshold();
+      const rate = bogging ? 8 : feedRate * 42 * bladeMult();
+      if (rate > 0) {
+        sharpen(rate * dt);
+        if (Math.random() < dt * 14) spawnCurl(pencilTipWorld(), false);
+      }
+      AudioFX.motorSet(feedRate, bogging);
+    } else {
+      feedRate = Math.max(0, feedRate - dt * 3);
+      bogging = false;
+    }
+    feedDepth += ((feeding ? feedRate : 0) - feedDepth) * Math.min(1, dt * 8);
+    pencilGroup.position.y = 1.62 - feedDepth * 0.16;
+  }
+
+  // Surge scheduling
+  if (!S.zen && !surgeActive && now >= nextSurgeAt) startSurge();
+  if (surgeActive && now >= surgeEndsAt) endSurge();
+  surgeLight.intensity += ((surgeActive ? 14 + Math.sin(now * 9) * 5 : 0) - surgeLight.intensity) * Math.min(1, dt * 6);
+  ledMat.emissive.setHex(surgeActive ? 0xffd34d : (S.mode === 'electric' ? 0x35d07f : 0x35d07f));
+  ledMat.emissiveIntensity = surgeActive ? 2.5 : (S.mode === 'electric' ? 1.2 : 0.4);
+
+  // Tray slide animation
+  traySlide += (traySlideTarget - traySlide) * Math.min(1, dt * 7);
+  trayGroup.position.z = TRAY_BASE_Z + traySlide * 1.15;
+  if (dumpState === 'dumping') {
+    dumpTimer -= dt;
+    if (dumpTimer <= 0) finishDump();
+  }
+  // Auto-empty
+  if (S.upgrades.autoempty && dumpState === 'closed' && trayFull()) {
+    autoDumpTimer += dt;
+    if (autoDumpTimer > 0.6) { autoDumpTimer = 0; dumpClick(); setTimeout(() => { if (dumpState === 'out') dumpClick(); }, 700); }
+  } else autoDumpTimer = 0;
+
+  updateCurls(dt);
+  hudTimer += dt;
+  if (hudTimer > 0.1) { hudTimer = 0; updateHUD(); }
+  renderer.render(scene, camera);
+}
+
+// ---------- Init ----------
+setModeVisuals();
+updateHUD();
+loop();
+
+// Debug / test handle
+window.SHARP = {
+  state: S,
+  crankScreenPos, setMode, dumpClick, sharpen, buy: (id) => {
+    const item = SHOP.find((s) => s.id === id);
+    const lvl = S.upgrades[id];
+    if (!item || lvl >= item.max) return false;
+    const cost = item.costs[lvl];
+    if (S.wallet < cost) return false;
+    S.wallet -= cost; S.upgrades[id] += 1; save(); updateHUD(); return true;
+  },
+  trayCapacity, bogThreshold
+};
+</script>
+</body>
+</html>
