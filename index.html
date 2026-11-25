@@ -308,6 +308,13 @@ trayGroup.add(box(0.06, 0.1, 1.0, mat(0x7d583a, 0.7), -0.75, 0.14, 0));
 trayGroup.add(box(0.06, 0.1, 1.0, mat(0x7d583a, 0.7), 0.75, 0.14, 0));
 const trayHandle = box(0.5, 0.08, 0.08, mat(0x4a2f10, 0.6), 0, 0.1, 0.56);
 trayGroup.add(trayHandle);
+// Generous invisible hit box so the tray is easy to grab on a phone
+const trayHitBox = new THREE.Mesh(
+  new THREE.BoxGeometry(2.0, 0.6, 1.5),
+  new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+);
+trayHitBox.position.set(0, 0.15, 0);
+trayGroup.add(trayHitBox);
 const pileMat = mat(0xd9b380, 0.95);
 const pile = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), pileMat);
 pile.scale.set(1, 0.1, 0.65); pile.position.set(0, 0.14, 0); pile.visible = false;
@@ -419,9 +426,15 @@ function updateCurls(dt) {
 let crankAngle = 0, lastPointerAngle = null, cranking = false;
 let feeding = false, feedRate = 0, feedDepth = 0, bogging = false;
 let traySlide = 0, traySlideTarget = 0, dumpState = 'closed', dumpTimer = 0, autoDumpTimer = 0;
+let trayDrag = null, trayTilt = 0, trayTiltTarget = 0, trayShiftX = 0, trayShiftXTarget = 0, pourAcc = 0;
 let surgeActive = false, surgeEndsAt = 0, nextSurgeAt = performance.now() / 1000 + 100 + Math.random() * 60;
 let lastFullToast = 0, toastTimer = null;
 S.surgeActive = false;
+
+function buzz(pattern) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+}
+const raycaster = new THREE.Raycaster();
 
 const $ = (id) => document.getElementById(id);
 const toastEl = $('toast'), hintEl = $('hint'), surgeEl = $('surge');
@@ -466,32 +479,48 @@ function crankStep() {
 }
 
 // ---------- Dump flow ----------
+function modeHint() {
+  return S.mode === 'electric'
+    ? 'Hold to feed. Green is the sweet spot, red bogs the motor.'
+    : 'Drag circles around the crank to sharpen';
+}
+function pourCurl() {
+  const p = new THREE.Vector3(
+    trayShiftX + (Math.random() - 0.5) * 1.0,
+    0.35 + Math.random() * 0.25,
+    TRAY_BASE_Z + traySlide * 1.15 + (Math.random() - 0.5) * 0.5
+  );
+  spawnCurl(p, true);
+  const c = curls[(curlIdx - 1 + CURL_MAX) % CURL_MAX];
+  c.vel.set((2.2 - p.x) * 0.9, 1.6 + Math.random(), (0.1 - p.z) * 0.9);
+}
+function startDumpPour() {
+  dumpState = 'dumping'; dumpTimer = 0.9; pourAcc = 0;
+  AudioFX.dump();
+  buzz([15, 40, 25]);
+  trayTiltTarget = -0.55; trayShiftXTarget = 0.55;
+  lidPivot.rotation.x = -1.1;
+  setTimeout(() => { lidPivot.rotation.x = -0.55; }, 900);
+}
 function dumpClick() {
   AudioFX.click();
   if (dumpState === 'closed') {
     if (S.tray < 1) { toast('Tray is empty, nothing to dump yet.'); return; }
     dumpState = 'out'; traySlideTarget = 1;
     $('dumpBtn').textContent = 'Dump into chest';
+    hintEl.textContent = 'Drag the tray toward the chest to dump it';
     toast('Tray out. Now dump it in the chest.');
   } else if (dumpState === 'out') {
-    dumpState = 'dumping'; dumpTimer = 0.9;
-    AudioFX.dump();
-    const chestPos = new THREE.Vector3(2.2, 1.0, 0.1);
-    for (let i = 0; i < 18; i++) {
-      const p = new THREE.Vector3((Math.random() - 0.5) * 1.2, 0.3 + Math.random() * 0.3, TRAY_BASE_Z + traySlide * 1.1 + (Math.random() - 0.5) * 0.6);
-      spawnCurl(p, true);
-      const c = curls[(curlIdx - 1 + CURL_MAX) % CURL_MAX];
-      c.vel.set((chestPos.x - p.x) * 0.9, 1.6 + Math.random(), (chestPos.z - p.z) * 0.9);
-    }
-    lidPivot.rotation.x = -1.1;
-    setTimeout(() => { lidPivot.rotation.x = -0.55; }, 900);
+    startDumpPour();
   }
 }
 function finishDump() {
   const amount = Math.floor(S.tray);
   S.wallet += amount; S.tray = 0;
   dumpState = 'closed'; traySlideTarget = 0;
+  trayTiltTarget = 0; trayShiftXTarget = 0;
   $('dumpBtn').textContent = 'Slide tray out';
+  hintEl.textContent = modeHint();
   toast('Dumped ' + amount + ' shavings into the chest');
   pile.visible = false;
   save();
@@ -549,9 +578,7 @@ function setModeVisuals() {
   ledMat.emissiveIntensity = electric ? 1.2 : 0.4;
   $('feedWrap').style.display = electric ? 'block' : 'none';
   $('modeBtn').textContent = electric ? 'Electric' : 'Manual';
-  hintEl.textContent = electric
-    ? 'Hold to feed. Green is the sweet spot, red bogs the motor.'
-    : 'Drag circles around the crank to sharpen';
+  hintEl.textContent = modeHint();
   placePencil();
 }
 function setMode(mode) {
@@ -575,8 +602,26 @@ function pointerAngle(e) {
   const p = crankScreenPos();
   return Math.atan2(e.clientY - p.y, e.clientX - p.x);
 }
+function trayHit(e) {
+  const ndc = new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  return raycaster.intersectObjects(trayGroup.children, true).length > 0;
+}
+function tryStartTrayDrag(e) {
+  if (dumpState === 'dumping') return false;
+  if (!trayHit(e)) return false;
+  trayDrag = {
+    mode: dumpState === 'out' ? 'dump' : 'pull',
+    startX: e.clientX, startY: e.clientY,
+    startSlide: traySlide, reachedFull: dumpState === 'out'
+  };
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  buzz(10);
+  return true;
+}
 canvas.addEventListener('pointerdown', (e) => {
   AudioFX.ensure();
+  if (tryStartTrayDrag(e)) { e.preventDefault(); return; }
   if (S.mode === 'manual') {
     cranking = true; lastPointerAngle = pointerAngle(e);
   } else {
@@ -585,6 +630,44 @@ canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (trayDrag) {
+    if (trayDrag.mode === 'pull') {
+      const dy = e.clientY - trayDrag.startY;
+      traySlide = Math.max(0, Math.min(1, trayDrag.startSlide + dy / 220));
+      traySlideTarget = traySlide;
+      if (traySlide >= 1 && !trayDrag.reachedFull) {
+        trayDrag.reachedFull = true;
+        trayDrag.mode = 'dump';
+        trayDrag.startX = e.clientX; trayDrag.startY = e.clientY;
+        dumpState = 'out';
+        $('dumpBtn').textContent = 'Dump into chest';
+        hintEl.textContent = 'Drag the tray toward the chest to dump it';
+        buzz(20);
+      }
+    } else {
+      const dx = e.clientX - trayDrag.startX;
+      const dy = e.clientY - trayDrag.startY;
+      if (dx > 70) {
+        if (S.tray < 1) {
+          toast('Tray is empty, nothing to dump yet.');
+          trayDrag = null; traySlideTarget = 0; dumpState = 'closed';
+          $('dumpBtn').textContent = 'Slide tray out';
+          hintEl.textContent = modeHint();
+        } else {
+          trayDrag = null;
+          startDumpPour();
+        }
+      } else if (dy < -90) {
+        trayDrag = null; traySlideTarget = 0; dumpState = 'closed';
+        trayTiltTarget = 0;
+        $('dumpBtn').textContent = 'Slide tray out';
+        hintEl.textContent = modeHint();
+      } else {
+        trayTiltTarget = dx > 0 ? Math.max(-0.3, -dx / 300) : 0;
+      }
+    }
+    return;
+  }
   if (S.mode === 'manual' && cranking && lastPointerAngle !== null) {
     const a = pointerAngle(e);
     let d = a - lastPointerAngle;
@@ -603,6 +686,22 @@ canvas.addEventListener('pointermove', (e) => {
   }
 });
 function endPointer() {
+  if (trayDrag) {
+    if (trayDrag.mode === 'pull') {
+      if (traySlide >= 0.7) {
+        traySlideTarget = 1; dumpState = 'out';
+        $('dumpBtn').textContent = 'Dump into chest';
+        hintEl.textContent = 'Drag the tray toward the chest to dump it';
+        buzz(15);
+      } else {
+        traySlideTarget = 0; dumpState = 'closed';
+      }
+    } else {
+      traySlideTarget = 1;
+      trayTiltTarget = 0;
+    }
+    trayDrag = null;
+  }
   cranking = false; lastPointerAngle = null;
   if (feeding) { feeding = false; AudioFX.motorStop(); }
 }
@@ -749,11 +848,17 @@ function loop() {
   ledMat.emissive.setHex(surgeActive ? 0xffd34d : (S.mode === 'electric' ? 0x35d07f : 0x35d07f));
   ledMat.emissiveIntensity = surgeActive ? 2.5 : (S.mode === 'electric' ? 1.2 : 0.4);
 
-  // Tray slide animation
+  // Tray slide / tilt animation
   traySlide += (traySlideTarget - traySlide) * Math.min(1, dt * 7);
   trayGroup.position.z = TRAY_BASE_Z + traySlide * 1.15;
+  trayTilt += (trayTiltTarget - trayTilt) * Math.min(1, dt * 8);
+  trayShiftX += (trayShiftXTarget - trayShiftX) * Math.min(1, dt * 8);
+  trayGroup.rotation.z = trayTilt;
+  trayGroup.position.x = trayShiftX;
   if (dumpState === 'dumping') {
     dumpTimer -= dt;
+    pourAcc += dt;
+    while (pourAcc > 0.06) { pourAcc -= 0.06; pourCurl(); }
     if (dumpTimer <= 0) finishDump();
   }
   // Auto-empty
@@ -784,7 +889,14 @@ window.SHARP = {
     if (S.wallet < cost) return false;
     S.wallet -= cost; S.upgrades[id] += 1; save(); updateHUD(); return true;
   },
-  trayCapacity, bogThreshold
+  trayCapacity, bogThreshold,
+  trayScreenPos() {
+    const v = new THREE.Vector3();
+    trayGroup.getWorldPosition(v);
+    v.project(camera);
+    return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
+  },
+  tray: () => ({ slide: traySlide, state: dumpState, tilt: trayTilt })
 };
 </script>
 </body>
