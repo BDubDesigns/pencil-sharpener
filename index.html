@@ -4,10 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Pencil Sharpener</title>
+<link rel="icon" href="data:,">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #f5e9d3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  #scene { position: fixed; inset: 0; touch-action: none; display: block; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
   #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
   .panel { background: rgba(255, 252, 245, 0.92); border: 2px solid #d8c9a8; border-radius: 14px; box-shadow: 0 2px 10px rgba(90, 60, 20, 0.18); }
   #topbar { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 10px; right: 10px; display: flex; gap: 8px; align-items: stretch; }
@@ -53,6 +54,8 @@
   .buy-btn:disabled { opacity: 0.4; }
   .buy-btn.owned { background: #8a8a8a; }
   #closeShop { width: 100%; margin-top: 12px; padding: 13px; font-size: 15px; font-weight: 800; color: #4a2f10; background: #e8dcc0; border: none; border-radius: 12px; cursor: pointer; }
+  #resetBtn { width: 100%; margin-top: 8px; padding: 10px; font-size: 13px; font-weight: 700; color: #8a6d3b; background: transparent; border: 1px solid #d8c9a8; border-radius: 12px; cursor: pointer; }
+  #resetBtn.armed { color: #fff; background: #c0392b; border-color: #c0392b; }
   #title { position: absolute; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 150px); left: 50%; transform: translateX(-50%); font-size: 13px; color: #a08a63; font-weight: 600; pointer-events: none; white-space: nowrap; }
 </style>
 </head>
@@ -100,6 +103,7 @@
     <div class="shop-sub">Everything costs shavings. Upgrades change how the sharpener feels, not just the numbers.</div>
     <div id="shopItems"></div>
     <button id="closeShop">Done</button>
+    <button id="resetBtn">Reset game</button>
   </div>
 </div>
 <script type="importmap">
@@ -211,7 +215,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf5e9d3);
-scene.fog = new THREE.Fog(0xf5e9d3, 14, 26);
+scene.fog = new THREE.Fog(0xf5e9d3, 18, 34);
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
 camera.position.set(0, 3.7, 6.8);
 camera.lookAt(0, 0.9, 0);
@@ -272,7 +276,7 @@ hole.rotation.z = Math.PI / 2; hole.position.set(-0.86, 0.62, 0); sharpener.add(
 // Crank on the right face
 const crankGroup = new THREE.Group();
 crankGroup.position.set(0.92, 0.62, 0);
-crankGroup.scale.setScalar(1.45);
+crankGroup.scale.setScalar(1.75);
 sharpener.add(crankGroup);
 const crankDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 20), mat(0xd7dade, 0.25, 0.9));
 crankDisc.rotation.z = Math.PI / 2; crankDisc.castShadow = true; crankGroup.add(crankDisc);
@@ -649,15 +653,58 @@ $('soundBtn').addEventListener('click', () => {
   save(); updateHUD();
 });
 
+// ---------- Factory reset (two taps: arm, then confirm) ----------
+let resetArmed = false, resetArmTimer = null;
+function resetGame() {
+  if (feeding) { feeding = false; AudioFX.motorStop(); }
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  S = defaultState();
+  crankAngle = 0; lastPointerAngle = null; cranking = false;
+  feedRate = 0; feedDepth = 0; bogging = false;
+  traySlide = 0; traySlideTarget = 0; dumpState = 'closed'; dumpTimer = 0; autoDumpTimer = 0;
+  surgeActive = false; S.surgeActive = false;
+  surgeEl.style.display = 'none';
+  nextSurgeAt = performance.now() / 1000 + 100 + Math.random() * 60;
+  lidPivot.rotation.x = -0.55;
+  pile.visible = false;
+  for (const c of curls) { c.active = false; c.rest = false; c.mesh.visible = false; }
+  $('dumpBtn').textContent = 'Slide tray out';
+  $('shop').classList.remove('open');
+  setModeVisuals();
+  updateHUD();
+  save();
+  toast('Fresh start. New pencil, empty chest.');
+}
+$('resetBtn').addEventListener('click', () => {
+  if (!resetArmed) {
+    resetArmed = true;
+    $('resetBtn').textContent = 'Tap again to wipe everything';
+    $('resetBtn').classList.add('armed');
+    clearTimeout(resetArmTimer);
+    resetArmTimer = setTimeout(() => {
+      resetArmed = false;
+      $('resetBtn').textContent = 'Reset game';
+      $('resetBtn').classList.remove('armed');
+    }, 4000);
+    return;
+  }
+  clearTimeout(resetArmTimer);
+  resetArmed = false;
+  $('resetBtn').textContent = 'Reset game';
+  $('resetBtn').classList.remove('armed');
+  resetGame();
+});
+
 // ---------- Resize ----------
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
-  renderer.setSize(w, h, false);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(w, h, true);
   camera.aspect = w / h;
   if (camera.aspect < 0.6) {
-    camera.fov = 55;
-    camera.position.set(0, 4.4, 10.2);
-    camera.lookAt(-0.2, 1.0, 0);
+    camera.fov = 60;
+    camera.position.set(0.3, 5.0, 12.6);
+    camera.lookAt(0.3, 0.8, 0);
   } else {
     camera.fov = 40;
     camera.position.set(0, 3.7, 6.8);
@@ -728,7 +775,7 @@ loop();
 
 // Debug / test handle
 window.SHARP = {
-  state: S,
+  get state() { return S; },
   crankScreenPos, setMode, dumpClick, sharpen, buy: (id) => {
     const item = SHOP.find((s) => s.id === id);
     const lvl = S.upgrades[id];

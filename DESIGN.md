@@ -5,6 +5,12 @@ sharpening a pencil. Built in a single `index.html` (Three.js vendored
 locally in `vendor/`, no runtime CDN dependency), mobile-first, touch
 friendly. Synthesized WebAudio sounds only, no audio assets.
 
+## Slice 1.1 — blank scene on phones (fixed) + reset button
+- Root cause: `renderer.setSize(w, h, false)` never set the canvas CSS size. A canvas is a replaced element, so `position: fixed; inset: 0` does not stretch it; it keeps its intrinsic size, which is the drawing buffer (CSS size x devicePixelRatio). On DPR 1 desktops the buffer equals the viewport so it looked fine; on any real phone (DPR 2-3) the canvas rendered 2-3x too big, anchored top-left, pushing the sharpener off-screen bottom-right and leaving only empty background visible. The game logic still ran, which is why the meters moved.
+- Fix: `renderer.setSize(w, h, true)` plus explicit `width: 100%; height: 100%` on the canvas, and `setPixelRatio` re-applied on resize. Portrait camera re-framed (fov 60, pulled back to 12.6, centered on the scene) so sharpener, pencil, tray and chest all fit a narrow phone screen; fog pushed out to match. Crank enlarged (1.45x to 1.75x) for a bigger grab target.
+- Reset button: small "Reset game" button at the bottom of the Shop panel. Two-tap arm/confirm (arms for 4 seconds, second tap wipes). Clears the localStorage save and restores the starting state: 0 shavings, fresh pencil, empty tray, no upgrades, manual mode.
+- Verified headless in mobile emulation (390x844, DPR 2.25): canvas rect equals viewport, sharpener/pencil/desk/tray/chest all visible in a portrait screenshot, zero console errors; desktop 1280x800 also clean.
+
 ## The fantasy
 
 You are at a desk with a chunky old-school sharpener, a box of pencils,
